@@ -200,8 +200,6 @@ The repo also includes small CamelForth words for faster number crunching and si
 
 ---
 
-## License (choose one)
-
 > **SPDX:**  
 > MIT → `MIT` · BSD 2-Clause → `BSD-2-Clause` · BSD 3-Clause → `BSD-3-Clause` · GPLv3 → `GPL-3.0-or-later`
 
