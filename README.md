@@ -1,4 +1,6 @@
-# SC7xx Retro Lab — Z80 / RomWBW (SC722 • SC131 • SC719 • SC794)
+# SC7xx Retro Lab — Z80 / RomWBW (SC722 • SC131 • SC719 • SC794)  
+
+- All Written byChat-GPT5 at the request of KD5VMF
 
 A collection of small-but-fun programs and utilities for the SC7xx family running **RomWBW CP/M**:
 
