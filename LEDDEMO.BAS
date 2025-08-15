@@ -1,0 +1,10 @@
+10 REM SC719 Random LED Display - MBASIC (Port 00h)
+20 LEDPORT = &H00
+30 RANDOMIZE
+40 PRINT "Random LED demo. Press Ctrl-C to stop..."
+50 FOR I = 1 TO 1000000
+60   R = INT(RND * 256)
+70   OUT LEDPORT, R
+80   FOR D = 1 TO 500: NEXT D
+90 NEXT I
+100 GOTO 50
