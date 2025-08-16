@@ -1,10 +1,10 @@
-# SC7xx Retro Lab — Z80 / RomWBW (SC722 • SC131 • SC719 • SC794)  
+# SC7xx Retro Lab — Z80 / RomWBW (SC722 • SC131 • SC719 • SC794)
 
-- All Written byChat-GPT5 at the request of KD5VMF
+- All Written by Chat-GPT5 at the request of KD5VMF
 
 A collection of small-but-fun programs and utilities for the SC7xx family running **RomWBW CP/M**:
 
-- **MBASIC** math demos (primes, totient, Collatz “record hunter”), text effects, and LED drivers  
+- **MBASIC** math demos (primes, totient, Collatz “record hunter”), LED drivers, and visual toys  
 - **CamelForth** snippets for faster number crunching and I/O experiments  
 - Simple **I/O utilities** for front-panel LEDs and ports  
 - **Transfer helpers** (XMODEM) and quick-reference docs
@@ -75,6 +75,7 @@ If your board maps LEDs elsewhere, edit that constant in the source (e.g., `&H80
 
 | Program           | Category     | What it does                                                                 | Input/Prompt                       | Screen Output                            | File Output           | LEDs |
 |-------------------|--------------|------------------------------------------------------------------------------|------------------------------------|-------------------------------------------|-----------------------|------|
+| `LEDLAB10.BAS`    | I/O/Visual   | **LED Math Lab**: 10 distinct patterns + **mode 0 = cycle all**             | Delay; Mode (0–10)                 | Mode banner; returns to menu on **Q**     | —                     | ✔    |
 | `COLLINFO.BAS`    | Math/Heavy   | **Collatz Record Hunter** with detailed intro; finds new max **steps/peak** | N (upper limit), save Y/N          | Compact “record” lines + progress         | `COLLSTAT.TXT` (opt.) | ✔    |
 | `PRIMELED.BAS`    | Math         | Prime scanner: prints primes, gap, counts                                   | N (upper limit)                    | Prime lines + periodic summary            | `PRIMESTA.TXT`        | ✔    |
 | `PRIMEFORE.BAS`   | Math         | Primes forever (numbers only); **Q** quits                                  | —                                  | Just the primes                           | —                     | —    |
@@ -92,64 +93,63 @@ CSV files are simple “comma-separated-ish”—easy to import into a spreadshe
 
 ## Detailed Program Notes
 
+### `LEDLAB10.BAS` — LED Math Lab (10 patterns + cycle mode)
+A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). Pick any of **10** patterns or select **mode 0** to cycle through all of them repeatedly. Press **Q** inside any mode to return to the menu.
+
+- **Inputs:** delay (bigger = slower) and mode (0–10).
+- **Patterns:**  
+  1. **LFSR-8** — max-length 8-bit LFSR (255-step pseudo-random).  
+  2. **Rule-30 CA** — 1-D cellular automaton on an 8-bit ring (wraparound).  
+  3. **Logistic map** — `x → 4x(1−x)` in fixed-point 0..255; chaotic.  
+  4. **Counter** — binary up counter (0..255 wrap).  
+  5. **RotRing** — rotating one-hot ring (bit marches left, wraps).  
+  6. **KITT** — bouncing one-hot scanner (back-and-forth).  
+  7. **Sparkle** — decay + random spark bits (twinkling).  
+  8. **Rule-110 CA** — another classic cellular automaton.  
+  9. **BitReverse** — counter displayed with bit-reversal.  
+  10. **DualRing** — two one-hot rings in opposite directions.  
+- **Mode 0 (Cycle):** Asks for steps per pattern (default 256), runs 1→10, loops forever until **Q**.
+- **LED port:** change `LEDPORT = &H..` near the top if your LEDs use a different I/O address.
+
 ### `COLLINFO.BAS` — Collatz Record Hunter (LEDs + optional logging)
-- **What it does:** Scans `1..N`. For each `n`, applies:
-  - even → `n := n/2`
-  - odd  → `n := 3*n + 1`
-  Tracks **steps** to reach 1 and **peak** value along the chain.
+- **What it does:** Scans `1..N`. For each `n`, applies: even → `n := n/2`, odd → `n := 3*n + 1`. Tracks **steps** and **peak** value for the chain.
 - **Records printed:** `[NEW_MAX_STEPS]`, `[NEW_MAX_PEAK]` (or both).
-- **Screen output (fixed-width):**  
-  `n=… s=… p=… a=… avg=… [RECORD]`  
-  where `a = peak/n` and `avg` is the running average of steps so far.
-- **LEDs:** Shows **low 8 bits** of current chain value on `LEDPORT`, updated ~every 8 steps.
-- **Prompts:**  
-  - *Upper limit N (0 = very high)* → start with `20000`  
-  - *Save results (Y/N)* → logs only new records to `COLLSTAT.TXT` if `Y`
+- **Screen (fixed-width):** `n=… s=… p=… a=… avg=… [RECORD]`
+- **LEDs:** low byte of the current chain value (update ~every 8 steps).
+- **Prompts:** N (0 = very high), save Y/N → `COLLSTAT.TXT` if Y.
 - **Stop:** `Ctrl-C`.
 
 ### `PRIMELED.BAS` — Primes + LED mirror + stats file
-- **What it does:** Scans up to `N`. For each prime prints prime number, **gap** from previous prime, and **count**.  
-- **LEDs:** Mirrors low byte of the prime to `LEDPORT`.
-- **File:** `PRIMESTA.TXT` (`prime,gap,count,maxgap`).
-- **Stop:** `Ctrl-C`.
+- Prime, **gap** from previous, **count**.  
+- LEDs mirror low byte of prime.  
+- Writes `PRIMESTA.TXT` (`prime,gap,count,maxgap`).
 
 ### `PRIMEFORE.BAS` — Primes forever (numbers only)
-- **What it does:** Prints primes endlessly using sqrt trial division over odd candidates.  
-- **Stop:** Press `Q` (uppercase or lowercase).
+- Sqrt trial division over odd candidates.  
+- Quit with `Q`.
 
 ### `PRIMEGAP.BAS` — Prime & gap table to L
-- **What it does:** Finds primes ≤ `L` and logs `prime, gap, running_max_gap`.  
-- **Progress:** Prints every 500 primes.  
-- **File:** `PRIMEGAP.TXT`.
+- Finds primes ≤ `L` and logs `prime, gap, running_max_gap` → `PRIMEGAP.TXT`.  
+- Progress printed every 500 primes.
 
 ### `TOTIENT.BAS` — Euler’s φ(n) table 1..N
-- **What it does:** Efficiently computes φ(n) via the product formula (factor once per distinct prime factor).
-- **Output:** `n,phi(n),phi(n)/n` in `TOTIENT.TXT`.  
-- **Summary:** Prints running maximum φ(n) and final sum `Σ φ(n)`.
+- Computes φ(n) using the product formula (factor by distinct primes).  
+- Writes `n,phi(n),phi(n)/n` to `TOTIENT.TXT`; shows running max and final sum.
 
 ### `DIVCLASS.BAS` — Perfect / Abundant / Deficient
-- **What it does:** For each `n` up to `N`, sums proper divisors and classifies:
-  - **Perfect** if sum = n (e.g., 6, 28)
-  - **Abundant** if sum > n
-  - **Deficient** if sum < n
-- **Screen:** row per `n`, periodic counts, final tallies and largest “excess” (`sum - n`).
+- Proper-divisor sum per `n`; classifies; prints periodic counts and final tallies.
 
 ### `DIVCLASS_SAVE.BAS` — Same, with logging
-- **File:** `DIVCLASS.TXT` (`n,sum_proper_divisors,kind`) with periodic progress and same final summary.
+- Writes `DIVCLASS.TXT` (`n,sum_proper_divisors,kind`) and prints the same summaries.
 
 ### `STARFIELD.BAS` — ANSI/VT100 starfield
-- **What it does:** Clears screen with ANSI, animates 50 stars, wraps edges.  
-- **Terminal:** Needs VT100/ANSI escape support (most modern terminals do).  
-- **Stop:** `Q`.
+- Needs ANSI/VT100 terminal; `Q` to quit.
 
 ### `FIBRATIO.BAS` — Fibonacci with ratio to previous
-- **What it does:** Prints `(term, fib, ratio)` where `ratio := F(n)/F(n-1)` tends to φ ≈ 1.618034.  
-- **Edge case:** The first ratio prints `N/A` to avoid divide by zero.
+- 3-column table; first ratio prints `N/A` to avoid divide-by-zero.
 
 ### `LEDDEMO.BAS` — Random LED patterns
-- **What it does:** Outputs random bytes to `LEDPORT` with a small delay so changes are visible.  
-- **Tweak speed:** Adjust the inner delay loop.  
-- **Stop:** `Ctrl-C`.
+- Random byte to LED port with small delay; `Ctrl-C` to stop.
 
 ---
 
@@ -157,6 +157,7 @@ CSV files are simple “comma-separated-ish”—easy to import into a spreadshe
 
 ```
 /mbasic     # MBASIC-80 sources (.BAS)
+  LEDLAB10.BAS
   COLLINFO.BAS
   PRIMELED.BAS
   PRIMEFORE.BAS
@@ -194,17 +195,19 @@ CSV files are simple “comma-separated-ish”—easy to import into a spreadshe
 
 ## Forth Corner (CamelForth)
 
-The repo also includes small CamelForth words for faster number crunching and simple I/O (e.g., a prime tester and a prime printer that exits on keypress).  
+The repo may include small CamelForth words for faster number crunching and simple I/O (e.g., a prime tester and a prime printer that exits on keypress).  
 - Enter Forth: `FORTH` or from menu where available; exit with `BYE`.  
 - **Why Forth?** It’s compact and fast on Z80, great for tight loops and direct port I/O.
 
 ---
 
+## License (choose one)
+
 > **SPDX:**  
 > MIT → `MIT` · BSD 2-Clause → `BSD-2-Clause` · BSD 3-Clause → `BSD-3-Clause` · GPLv3 → `GPL-3.0-or-later`
 
 ### MIT License
-Copyright (c) 2025 Adam Figueroa
+Copyright (c) 2025
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the “Software”), to deal
@@ -223,5 +226,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,  
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN  
 THE SOFTWARE.
-
----
