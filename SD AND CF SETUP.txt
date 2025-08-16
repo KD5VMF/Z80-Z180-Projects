@@ -1,4 +1,5 @@
 Setup CF or SD (Only do either the SD or the CF separately!) From CP/M on B: (This will make an 8kb C: Drive, that is a lot of storage for computer like this!)
+
 FDISK80          — Open the RomWBW partition tool from the RAM drive (B:).
 0                — Select HBIOS unit 0 (usually SD0: on SC7xx).
 I                — Initialize a new, empty MBR (wipes old partitions on this card).
@@ -97,3 +98,4 @@ C>stat c:*.*[full]
    53     8k    1 R/O C:ZXD.COM
     3     4k    1 R/W C:led1.bas
 Bytes Remaining On C: 7708k
+
