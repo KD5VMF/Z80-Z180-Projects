@@ -1,4 +1,4 @@
-Setup CF or SD (Only do either the SD or the CF separately!) From CP/M on B: (This will make a 8kb C: Drive, that is a lot of storage for computer like this!)
+Setup CF or SD (Only do either the SD or the CF separately!) From CP/M on B: (This will make an 8kb C: Drive, that is a lot of storage for computer like this!)
 FDISK80          — Open the RomWBW partition tool from the RAM drive (B:).
 0                — Select HBIOS unit 0 (usually SD0: on SC7xx).
 I                — Initialize a new, empty MBR (wipes old partitions on this card).
@@ -17,5 +17,6 @@ CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M
 
 From B: do...
 copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD).                   
+
 
 
