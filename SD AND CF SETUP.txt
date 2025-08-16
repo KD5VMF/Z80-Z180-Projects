@@ -16,5 +16,4 @@ CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M
                   (Type CAPITAL Y when it asks. This doesn’t low-level format—just resets the directory.)
 
 From B: do...
-copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD). 
-                  (If COPY doesn’t accept this form on your setup, use PIP instead:  PIP C:=B:*.* )
+copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD).                   
