@@ -1,0 +1,20 @@
+Setup CF or SD From CP/M on B:
+FDISK80          — Open the RomWBW partition tool from the RAM drive (B:).
+0                — Select HBIOS unit 0 (usually SD0: on SC7xx).
+I                — Initialize a new, empty MBR (wipes old partitions on this card).
+N                — Create a New partition entry.
+1                — Partition number = 1.
+[Enter]          — Starting cylinder = default 0 (you can also type 0; same result).
+0                — (If it prompts again for start, enter 0; otherwise skip—some builds show this.)
+31               — Ending cylinder = 31 (makes a 32-cylinder slice: cylinders 0..31).
+A                — Toggle the Active/boot flag…
+1                — …for partition #1 (marks it active).
+W                — Write the new partition table to the card.
+Q                — Quit FDISK80 (table is now saved on the card).
+
+CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M slice).
+                  (Type CAPITAL Y when it asks. This doesn’t low-level format—just resets the directory.)
+
+From B: do...
+copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD). 
+                  (If COPY doesn’t accept this form on your setup, use PIP instead:  PIP C:=B:*.* )
