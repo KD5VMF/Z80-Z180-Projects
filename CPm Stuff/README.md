@@ -130,7 +130,7 @@ LEDCOUNT
 ## Quick Reference (Cheat Sheet)
 
 ```text
-Create:   ED PROG.ASM   → *I → paste → ^Z → *E
+Create:   ED PROG.ASM   → *I → paste → Ctrl-Z → *E
 Assemble: ASM PROG
 Link:     LOAD PROG
 Run:      PROG
