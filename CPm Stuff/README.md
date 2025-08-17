@@ -56,7 +56,7 @@ The **LEDCOUNT** example shows how to paste a full source file, assemble it into
 ED LEDCOUNT.ASM
 *I
 ; paste the full LEDCOUNT source here (see LEDCOUNT Build.txt in this folder)
-^Z
+Ctrl-Z
 *E
 ```
 
