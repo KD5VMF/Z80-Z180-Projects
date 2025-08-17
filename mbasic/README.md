@@ -1,6 +1,6 @@
 # SC7xx Retro Lab — Z80 / RomWBW (SC722 • SC131 • SC719 • SC794)
 
-- All Written by Chat-GPT5 at the request of KD5VMF
+- All written by Chat-GPT5 at the request of **KD5VMF**
 
 A collection of small-but-fun programs and utilities for the SC7xx family running **RomWBW CP/M**:
 
@@ -33,14 +33,14 @@ A collection of small-but-fun programs and utilities for the SC7xx family runnin
 
 Run any MBASIC program:
 
-```text
+```
 C:
 MBASIC
-LOAD "COLLINFO.BAS"
+LOAD "PROGRAM.BAS"
 RUN
 ```
 
-- Save: `SAVE "COLLINFO.BAS"`  
+- Save edits: `SAVE "PROGRAM.BAS"`  
 - Exit to CP/M: `SYSTEM`  
 - List BASIC files: `DIR *.BAS`
 
@@ -48,7 +48,7 @@ RUN
 
 - Receive PC → SC7xx:
   ```
-  XM RK FILENAME.COM      ; waits "Ready to receive..."
+  XM RK FILENAME.COM
   ```
   Then in your PC terminal, **Send via XMODEM-1K (CRC)**.
 
@@ -59,126 +59,116 @@ RUN
 
 ---
 
-## LED Port Note
+## LED Port Note (front-panel LEDs)
 
-Several programs drive front-panel LEDs. We default to:
+Several programs drive front-panel LEDs. The default is:
 
 ```basic
 LEDPORT = &H00   ' SC719 typical demo port
 ```
 
-If your board maps LEDs elsewhere, edit that constant in the source (e.g., `&H80`). The programs update LEDs gently so patterns are visible.
+If your board maps LEDs elsewhere, edit that constant in the source (e.g., `&H80`). The programs update LEDs slowly enough to see patterns.
+
+---
+
+## NEW: MAX7219 8×8 LED Matrix (MBASIC)
+
+**File:** `MAX7219.BAS`  
+**What it is:** A fast MAX7219 driver + art demo for one 8×8 LED matrix. Includes a **bouncing ball** animation, diagonal sweep, expanding box pulse, rain/twinkle, and wave patterns. Menu lets you **cycle all** or pick a single effect and set speed.
+
+### Wiring (single module)
+
+Use the **IN** header on the MAX7219 module (often labeled `VCC GND DIN CS CLK`). Do **not** wire to the OUT/DOUT side.
+
+- **MAX7219 VCC** → **+5 V**
+- **MAX7219 GND** → **GND** (must be common with SC7xx)
+- **MAX7219 DIN** → SC7xx **data bit**
+- **MAX7219 CS**  → SC7xx **chip-select bit**
+- **MAX7219 CLK** → SC7xx **clock bit**
+
+**SC719 (your wiring):**
+- DIN on **IO pin 0** (bit0)  
+- CS  on **IO pin 1** (bit1)  
+- CLK on **IO pin 2** (bit2)  
+- Port assumed **&H00**
+
+In `MAX7219.BAS`, these are the masks at the top:
+
+```basic
+30 P = &H00      ' I/O port (change if your IO header is a different port)
+40 BDIN = 1      ' IO pin 0  -> mask 1
+50 BCS  = 2      ' IO pin 1  -> mask 2
+60 BCLK = 4      ' IO pin 2  -> mask 4
+```
+
+**Alternative example (older mapping you tried):**
+- DIN on pin 4 → mask **16**
+- CS  on pin 6 → mask **64**
+- CLK on pin 8 → mask **128**
+
+Then set:
+```basic
+40 BDIN = 16
+50 BCS  = 64
+60 BCLK = 128
+```
+
+### Run it
+
+```
+C:
+MBASIC
+LOAD "MAX7219.BAS"
+RUN
+```
+
+- You’ll see a menu:  
+  `Modes: 0=Cycle  1=Ball  2=Diag  3=Box  4=Rain  5=Wave`  
+  Then speed prompt: `SPD (0=fast, 1..9 slower)`
+- Try **Mode=1** (Ball) and **SPD=0** for fastest.
+
+### Tuning & Notes
+
+- **Brightness:** edit the **INTENSITY** register in the init code (0..15). The program sets it to **8** by default.  
+- **MBASIC 5.21 quirks already handled:**  
+  - No underscores in variable names  
+  - No `:` (multi-statement lines)  
+  - No inline `'` comments (uses `REM`)  
+  - Avoid reserved words (e.g., we use `DB` instead of `DATA`, `V` instead of `VAL`)
+- **Electrical:** MAX7219 modules want a solid **5 V**. Many 8×8 boards pull ~100–300 mA depending on intensity/content. Keep **GND common** with the SC7xx.  
+- **Speed tips:** Use `SPD=0`. The driver uses a precomputed bit mask table and minimal delay loops; for even more speed, a tiny Z80 routine to clock DIN/CLK/CS will beat MBASIC.  
+- **Mirrored image?** If the matrix appears flipped left/right, swap bit order in the pixel routine, or rotate the module.
+
+### Troubleshooting
+
+- **Blank matrix:**  
+  - Confirm you used the **IN** header (`DIN CS CLK`), not the OUT/DOUT header.  
+  - Check **5 V** and **GND** continuity to the module; GND must be common with the SC7xx.  
+  - Verify masks match your actual IO bits; try toggling each bit manually from MBASIC (`OUT &H00,1`, `OUT &H00,2`, `OUT &H00,4`) and meter the lines.  
+- **Only some rows/columns light:** poor solder on the 8×8, or scan-limit not set; the program sets **SCAN_LIMIT = 7** (all 8 rows).  
+- **Too dim/bright:** change the **INTENSITY** register (0..15).  
+- **Chain won’t work:** this program addresses **one** device. For daisy-chains, send **N 16-bit words** per write, last device first, and use **NO-OP (0x00)** for words targeting earlier devices.
 
 ---
 
 ## Program Index (MBASIC)
 
-| Program           | Category     | What it does                                                                 | Input/Prompt                       | Screen Output                            | File Output           | LEDs |
-|-------------------|--------------|------------------------------------------------------------------------------|------------------------------------|-------------------------------------------|-----------------------|------|
-| `LEDLAB10.BAS`    | I/O/Visual   | **LED Math Lab**: 10 distinct patterns + **mode 0 = cycle all**             | Delay; Mode (0–10)                 | Mode banner; returns to menu on **Q**     | —                     | ✔    |
-| `COLLINFO.BAS`    | Math/Heavy   | **Collatz Record Hunter** with detailed intro; finds new max **steps/peak** | N (upper limit), save Y/N          | Compact “record” lines + progress         | `COLLSTAT.TXT` (opt.) | ✔    |
-| `PRIMELED.BAS`    | Math         | Prime scanner: prints primes, gap, counts                                   | N (upper limit)                    | Prime lines + periodic summary            | `PRIMESTA.TXT`        | ✔    |
-| `PRIMEFORE.BAS`   | Math         | Primes forever (numbers only); **Q** quits                                  | —                                  | Just the primes                           | —                     | —    |
-| `PRIMEGAP.BAS`    | Math         | Primes ≤ N with **gap** from previous and running **max gap**               | L (limit)                          | Periodic progress every 500 primes        | `PRIMEGAP.TXT`        | —    |
-| `TOTIENT.BAS`     | Math/Table   | Euler’s **φ(n)** for 1..N (fast factorization loop)                         | N (limit)                          | Periodic progress                         | `TOTIENT.TXT`         | —    |
-| `DIVCLASS.BAS`    | Math/Table   | Sum of proper divisors; classify **Perfect/Abundant/Deficient**             | N (limit)                          | Each n with sum + class; final summary    | —                     | —    |
-| `DIVCLASS_SAVE.BAS`| Math/Table  | Same as above, but logs to disk                                             | N (limit)                          | Progress + final summary                  | `DIVCLASS.TXT`        | —    |
-| `STARFIELD.BAS`   | Visual       | ANSI/VT100 **starfield** animation; **Q** quits                             | —                                  | Animated starfield                        | —                     | —    |
-| `FIBRATIO.BAS`    | Math/Demo    | Fibonacci numbers with running ratio → **golden ratio** (φ)                 | N (terms)                          | Neat 3-column table                       | —                     | —    |
-| `LEDDEMO.BAS`     | I/O/Visual   | Random LED patterns at LED port with gentle delay                           | —                                  | “Press Ctrl-C to stop…” banner            | —                     | ✔    |
-| `BYTEGLOW.BAS`   | I/O/Visual   | **ByteGlow**: menu LED show (9 patterns; **0 = cycle all**; `+`/`-` speed; `I` invert; `Q` quit) | —                                  | Pattern label + hints                    | —                     | ✔    |
+| Program           | Category     | What it does                                                                 | Input/Prompt                       | Screen Output                            | File Output           | LEDs / Matrix |
+|-------------------|--------------|------------------------------------------------------------------------------|------------------------------------|-------------------------------------------|-----------------------|---------------|
+| `MAX7219.BAS`     | Visual/I-O   | **MAX7219 8×8 Matrix** demo: Ball, Diag, Box, Rain, Wave; **0=cycle all**   | Mode (0–5), SPD (0–9)              | Menu + effect banners                     | —                     | Matrix ✔      |
+| `BYTEGLOW.BAS`    | I/O/Visual   | **ByteGlow**: 9 LED patterns; `0=cycle`, `+/-` speed, `I` invert, `Q` quit  | —                                  | Pattern label + hints                     | —                     | Front LEDs ✔  |
+| `LEDLAB10.BAS`    | I/O/Visual   | **LED Math Lab**: 10 patterns; **mode 0 = cycle all**                        | Delay; Mode (0–10)                 | Mode banner; `Q` back to menu             | —                     | Front LEDs ✔  |
+| `COLLINFO.BAS`    | Math/Heavy   | **Collatz Record Hunter** (records on steps/peak, optional log)              | N (0 = huge), save Y/N             | Compact progress + record lines           | `COLLSTAT.TXT` (opt.) | ✔             |
+| `PRIMELED.BAS`    | Math         | Prime scanner + **gap** + **count**; LEDs mirror low byte                    | N (upper limit)                    | Prime lines + periodic summary            | `PRIMESTA.TXT`        | ✔             |
+| `PRIMEFORE.BAS`   | Math         | Primes forever (numbers only); `Q` quits                                     | —                                  | Numbers scrolling                         | —                     | —             |
+| `PRIMEGAP.BAS`    | Math/Table   | Primes ≤ N with **gap** and running **max gap**                              | L (limit)                          | Periodic progress every 500 primes        | `PRIMEGAP.TXT`        | —             |
+| `TOTIENT.BAS`     | Math/Table   | Euler’s **φ(n)** for 1..N (distinct-prime factorization)                     | N (limit)                          | Periodic progress                         | `TOTIENT.TXT`         | —             |
+| `DIVCLASS*.BAS`   | Math/Table   | Proper-divisor sum → **Perfect/Abundant/Deficient**                          | N (limit)                          | Tallies + summary                         | `DIVCLASS.TXT` (save) | —             |
+| `STARFIELD.BAS`   | Visual       | ANSI/VT100 starfield animation; `Q` quits                                    | —                                  | Animated starfield                        | —                     | —             |
+| `FIBRATIO.BAS`    | Math/Demo    | Fibonacci with running ratio → golden ratio                                  | N (terms)                          | Neat 3-column table                       | —                     | —             |
+| `LEDDEMO.BAS`     | I/O/Visual   | Random LED patterns at LED port with gentle delay                            | —                                  | “Press Ctrl-C to stop…”                   | —                     | ✔             |
 
-CSV files are simple “comma-separated-ish”—easy to import into a spreadsheet.
-
----
-
-## Detailed Program Notes
-
-### `BYTEGLOW.BAS` — ByteGlow (Port 00h LED show)
-A compact, responsive LED show for SC7xx front‑panel LEDs (default port `&H00`, e.g., SC719).  
-Choose a pattern directly or use **0 = cycle all**. Adjust on the fly.
-
-- **Controls:** `0–9` choose pattern, `0`=cycle; `+`/`-` speed; `I` invert LEDs; `Q` quit (turns LEDs off).
-- **Patterns (1–9):**
-  1. **Bounce** — one‑hot scanner left/right.
-  2. **SweepUp** — 0 → 255 (binary counter up).
-  3. **SweepDn** — 255 → 0 (binary counter down).
-  4. **Grow/Shrink** — expand to 0xFF, then collapse.
-  5. **March→** — single bit marches LSB→MSB.
-  6. **←March** — single bit marches MSB→LSB.
-  7. **Alt 0xAA/0x55** — even/odd blink.
-  8. **In/Out** — pairs converge then diverge.
-  9. **Random** — random sparkle.
-- **Defaults:** LED port `&H00`; delay tuned for visibility; safe to break any time.
-- **File:** `BYTEGLOW.BAS`
-
-**Run:**
-```text
-C:
-MBASIC
-LOAD "BYTEGLOW.BAS"
-RUN
-```
-
-
-
-### `LEDLAB10.BAS` — LED Math Lab (10 patterns + cycle mode)
-A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). Pick any of **10** patterns or select **mode 0** to cycle through all of them repeatedly. Press **Q** inside any mode to return to the menu.
-
-- **Inputs:** delay (bigger = slower) and mode (0–10).
-- **Patterns:**  
-  1. **LFSR-8** — max-length 8-bit LFSR (255-step pseudo-random).  
-  2. **Rule-30 CA** — 1-D cellular automaton on an 8-bit ring (wraparound).  
-  3. **Logistic map** — `x → 4x(1−x)` in fixed-point 0..255; chaotic.  
-  4. **Counter** — binary up counter (0..255 wrap).  
-  5. **RotRing** — rotating one-hot ring (bit marches left, wraps).  
-  6. **KITT** — bouncing one-hot scanner (back-and-forth).  
-  7. **Sparkle** — decay + random spark bits (twinkling).  
-  8. **Rule-110 CA** — another classic cellular automaton.  
-  9. **BitReverse** — counter displayed with bit-reversal.  
-  10. **DualRing** — two one-hot rings in opposite directions.  
-- **Mode 0 (Cycle):** Asks for steps per pattern (default 256), runs 1→10, loops forever until **Q**.
-- **LED port:** change `LEDPORT = &H..` near the top if your LEDs use a different I/O address.
-
-### `COLLINFO.BAS` — Collatz Record Hunter (LEDs + optional logging)
-- **What it does:** Scans `1..N`. For each `n`, applies: even → `n := n/2`, odd → `n := 3*n + 1`. Tracks **steps** and **peak** value for the chain.
-- **Records printed:** `[NEW_MAX_STEPS]`, `[NEW_MAX_PEAK]` (or both).
-- **Screen (fixed-width):** `n=… s=… p=… a=… avg=… [RECORD]`
-- **LEDs:** low byte of the current chain value (update ~every 8 steps).
-- **Prompts:** N (0 = very high), save Y/N → `COLLSTAT.TXT` if Y.
-- **Stop:** `Ctrl-C`.
-
-### `PRIMELED.BAS` — Primes + LED mirror + stats file
-- Prime, **gap** from previous, **count**.  
-- LEDs mirror low byte of prime.  
-- Writes `PRIMESTA.TXT` (`prime,gap,count,maxgap`).
-
-### `PRIMEFORE.BAS` — Primes forever (numbers only)
-- Sqrt trial division over odd candidates.  
-- Quit with `Q`.
-
-### `PRIMEGAP.BAS` — Prime & gap table to L
-- Finds primes ≤ `L` and logs `prime, gap, running_max_gap` → `PRIMEGAP.TXT`.  
-- Progress printed every 500 primes.
-
-### `TOTIENT.BAS` — Euler’s φ(n) table 1..N
-- Computes φ(n) using the product formula (factor by distinct primes).  
-- Writes `n,phi(n),phi(n)/n` to `TOTIENT.TXT`; shows running max and final sum.
-
-### `DIVCLASS.BAS` — Perfect / Abundant / Deficient
-- Proper-divisor sum per `n`; classifies; prints periodic counts and final tallies.
-
-### `DIVCLASS_SAVE.BAS` — Same, with logging
-- Writes `DIVCLASS.TXT` (`n,sum_proper_divisors,kind`) and prints the same summaries.
-
-### `STARFIELD.BAS` — ANSI/VT100 starfield
-- Needs ANSI/VT100 terminal; `Q` to quit.
-
-### `FIBRATIO.BAS` — Fibonacci with ratio to previous
-- 3-column table; first ratio prints `N/A` to avoid divide-by-zero.
-
-### `LEDDEMO.BAS` — Random LED patterns
-- Random byte to LED port with small delay; `Ctrl-C` to stop.
+CSV files are simple and easy to import into a spreadsheet.
 
 ---
 
@@ -186,6 +176,8 @@ A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). P
 
 ```
 /mbasic     # MBASIC-80 sources (.BAS)
+  MAX7219.BAS
+  BYTEGLOW.BAS
   LEDLAB10.BAS
   COLLINFO.BAS
   PRIMELED.BAS
@@ -197,7 +189,6 @@ A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). P
   STARFIELD.BAS
   FIBRATIO.BAS
   LEDDEMO.BAS
-  BYTEGLOW.BAS
 
 /forth      # CamelForth words/snippets (fast math + IO)
 /docs       # Notes: port maps, cheatsheets, XMODEM usage, etc.
@@ -219,41 +210,46 @@ A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). P
   STAT B:*.*[FULL]
   ```
 - **Delete:** `ERA FILENAME.EXT` (⚠ no recycle bin).  
-- **FDISK80/CLRDIR/SYSCOPY/SYSGEN:** Use with care when prepping SD cards.  
-- **Logging programs** write to the **current drive**—switch to `C:` before running if you want files on SD.
+- **FDISK80 / CLRDIR / SYSCOPY / SYSGEN:** Use with care when prepping SD cards.  
+- **Logging programs** write to the **current drive**—switch to `C:` first if you want files on SD.
 
 ---
 
-## Forth Corner (CamelForth)
+## MBASIC-80 Rev 5.21 “Gotchas” (we already accounted for these)
 
-The repo may include small CamelForth words for faster number crunching and simple I/O (e.g., a prime tester and a prime printer that exits on keypress).  
-- Enter Forth: `FORTH` or from menu where available; exit with `BYE`.  
-- **Why Forth?** It’s compact and fast on Z80, great for tight loops and direct port I/O.
+- Variable names are letters/digits only (no `_`).  
+- No `:` multi-statement lines.  
+- No inline `'` comments; use `REM`.  
+- Some names are reserved (e.g., `DATA`, `VAL`).  
+- `IF ... THEN` can assign or `GOTO`; longer logic should be spread across lines.  
+- To seed `RND`, assign the call: `RN = RND(-1)`.
 
 ---
 
-## License (choose one)
+## License
 
-> **SPDX:**  
-> MIT → `MIT` · BSD 2-Clause → `BSD-2-Clause` · BSD 3-Clause → `BSD-3-Clause` · GPLv3 → `GPL-3.0-or-later`
+**SPDX-License-Identifier: MIT**
 
-### MIT License
+```
+MIT License
+
 Copyright (c) 2025
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the “Software”), to deal
-in the Software without restriction, including without limitation the rights  
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell  
-copies of the Software, and to permit persons to whom the Software is  
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in  
+The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR  
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,  
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE  
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER  
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,  
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN  
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
