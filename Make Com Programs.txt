@@ -1,0 +1,58 @@
+ED FASTLED.ASM
+
+*I
+; FASTLED.ASM — RC/Z80 CP/M 2.2  (8080 syntax for ASM.COM)
+LED_PORT   EQU 0         ; <<<< change this if your LED port isn't 00h
+BDOS       EQU 5
+
+        ORG 100H
+
+START:  DI
+        MVI  A,0FFH      ; all ON (active-high).  If active-low, swap 0FFH/00H in the two MVI A,xx lines
+        OUT  LED_PORT
+        CALL DELAY
+        MVI  A,00H
+        OUT  LED_PORT
+        CALL DELAY
+
+        CALL KEYCHECK    ; A=0 if no key, else A=char
+        CPI  'Q'
+        JZ   QUIT
+        CPI  'q'
+        JZ   QUIT
+        JMP  START
+
+QUIT:   XRA  A           ; A=0 (turn off if active-high)
+        OUT  LED_PORT
+        EI
+        RET
+
+; --- KEYCHECK: A=char if ready, else A=0 ---
+KEYCHECK:
+        PUSH D
+        MVI  C,6         ; BDOS 6 = direct console I/O
+        MVI  E,0FFH      ; 0xFF => status only
+        CALL BDOS        ; returns 0 if none, else char in A
+        POP  D
+        RET
+
+; --- Delay: tweak B (bigger = slower) ---
+DELAY:  MVI  B,40H
+D1:     MVI  C,0FFH
+D2:     DCR  C
+        JNZ  D2
+        DCR  B
+        JNZ  D1
+        RET
+
+        END  START
+
+Ctrl-Z
+*E
+
+
+
+
+ASM FASTLED
+LOAD FASTLED
+FASTLED
