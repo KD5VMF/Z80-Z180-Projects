@@ -40,9 +40,9 @@ START:  ; your code here
 
 Build/run:
 ```text
-A>ASM PROGRAM
-A>LOAD PROGRAM
-A>PROGRAM
+ASM PROGRAM
+LOAD PROGRAM
+PROGRAM
 ```
 
 ---
@@ -53,7 +53,7 @@ The **LEDCOUNT** example shows how to paste a full source file, assemble it into
 
 ### 1) Create the source with ED
 ```text
-A>ED LEDCOUNT.ASM
+ED LEDCOUNT.ASM
 *I
 ; paste the full LEDCOUNT source here (see LEDCOUNT Build.txt in this folder)
 ^Z
@@ -64,15 +64,15 @@ A>ED LEDCOUNT.ASM
 
 ### 2) Assemble & link
 ```text
-A>ASM LEDCOUNT
-A>LOAD LEDCOUNT
+ASM LEDCOUNT
+LOAD LEDCOUNT
 ```
 
 If assembly succeeded, you’ll have **LEDCOUNT.COM**.
 
 ### 3) Run
 ```text
-A>LEDCOUNT
+LEDCOUNT
 ```
 - The program outputs a **00..FF** count to the LED port (default **port 00h**).  
 - **Q** or **q** exits (LEDs are cleared on exit).  
@@ -96,14 +96,14 @@ A>LEDCOUNT
 
 - **Unassemble to confirm ports**:
   ```text
-  A>DDTZ LEDCOUNT.COM
+  DDTZ LEDCOUNT.COM
   U 0100
   ```
   You should see `OUT 00` if `LED_PORT EQU 0`.
 
 - **Hex check**:
   ```text
-  A>DUMP LEDCOUNT.COM
+  DUMP LEDCOUNT.COM
   ```
   Look for bytes **D3 00** (`OUT 00h`).
 
