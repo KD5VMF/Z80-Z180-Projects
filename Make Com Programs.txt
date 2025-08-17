@@ -1,6 +1,7 @@
-ED FASTLED.ASM
+ED FASTLED.ASM    <-- Using Old Edlin to edit a file named Fastled.asm
 
-*I
+*I      <-- Don't copt the * that is showing you that the above command worked and you are in Edlin. Now Press I and copy/Paste the bellow. i use TeraTerm with a Transmit delay of 25 msec/char
+
 ; FASTLED.ASM — RC/Z80 CP/M 2.2  (8080 syntax for ASM.COM)
 LED_PORT   EQU 0         ; <<<< change this if your LED port isn't 00h
 BDOS       EQU 5
@@ -47,12 +48,12 @@ D2:     DCR  C
 
         END  START
 
-Ctrl-Z
-*E
+Ctrl-Z  <-- Preass Ctrl + Z to exit typing mode
+*E  <-- Press E to save and exit edlin
 
 
+ASM FASTLED    <-- Assemble our new program
+LOAD FASTLED   <-- Load our new program
 
+FASTLED  <-- now we have a .com program we can run!! :)
 
-ASM FASTLED
-LOAD FASTLED
-FASTLED
