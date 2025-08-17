@@ -1,0 +1,13 @@
+10 REM === PRIME GENERATOR FOREVER (NUMBERS ONLY) ===
+20 PRINT "Prime generator. Press Q to quit."
+30 N = 2
+40 REM ----- MAIN LOOP -----
+50 IF N = 2 THEN PRINT N: N = 3: GOTO 140
+60 IF N - 2 * INT(N / 2) = 0 THEN GOTO 130
+70 S = INT(SQR(N)): D = 3
+80 IF D > S THEN PRINT N: GOTO 130
+90 IF N - INT(N / D) * D = 0 THEN GOTO 130
+100 D = D + 2: GOTO 80
+130 N = N + 2
+140 A$ = INKEY$: IF A$ = "Q" OR A$ = "q" THEN END
+150 GOTO 60
