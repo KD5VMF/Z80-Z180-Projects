@@ -16,17 +16,19 @@ Q                — Quit FDISK80 (table is now saved on the card).
 CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M slice).
                   (Type CAPITAL Y when it asks. This doesn’t low-level format—just resets the directory.)
 
+***********************************************************************************************************************************8
 From B: do...
-copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD).                   
 
+SYSCOPY C:=CPM.SYS      — Copy the system to your new C:
+copy *.* c:             — Copy all files from B: (RAM disk) to C: (SD).               
+
+***********************************************************************************************************************************
 From C: drive test with..
 c:
 stat c:*.*[full]
 
 
-
 Example from my SD Card...
-
 
 C>stat c:*.*[full]
 
@@ -98,4 +100,5 @@ C>stat c:*.*[full]
    53     8k    1 R/O C:ZXD.COM
     3     4k    1 R/W C:led1.bas
 Bytes Remaining On C: 7708k
+
 
