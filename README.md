@@ -86,12 +86,41 @@ If your board maps LEDs elsewhere, edit that constant in the source (e.g., `&H80
 | `STARFIELD.BAS`   | Visual       | ANSI/VT100 **starfield** animation; **Q** quits                             | —                                  | Animated starfield                        | —                     | —    |
 | `FIBRATIO.BAS`    | Math/Demo    | Fibonacci numbers with running ratio → **golden ratio** (φ)                 | N (terms)                          | Neat 3-column table                       | —                     | —    |
 | `LEDDEMO.BAS`     | I/O/Visual   | Random LED patterns at LED port with gentle delay                           | —                                  | “Press Ctrl-C to stop…” banner            | —                     | ✔    |
+| `BYTEGLOW.BAS`   | I/O/Visual   | **ByteGlow**: menu LED show (9 patterns; **0 = cycle all**; `+`/`-` speed; `I` invert; `Q` quit) | —                                  | Pattern label + hints                    | —                     | ✔    |
 
 CSV files are simple “comma-separated-ish”—easy to import into a spreadsheet.
 
 ---
 
 ## Detailed Program Notes
+
+### `BYTEGLOW.BAS` — ByteGlow (Port 00h LED show)
+A compact, responsive LED show for SC7xx front‑panel LEDs (default port `&H00`, e.g., SC719).  
+Choose a pattern directly or use **0 = cycle all**. Adjust on the fly.
+
+- **Controls:** `0–9` choose pattern, `0`=cycle; `+`/`-` speed; `I` invert LEDs; `Q` quit (turns LEDs off).
+- **Patterns (1–9):**
+  1. **Bounce** — one‑hot scanner left/right.
+  2. **SweepUp** — 0 → 255 (binary counter up).
+  3. **SweepDn** — 255 → 0 (binary counter down).
+  4. **Grow/Shrink** — expand to 0xFF, then collapse.
+  5. **March→** — single bit marches LSB→MSB.
+  6. **←March** — single bit marches MSB→LSB.
+  7. **Alt 0xAA/0x55** — even/odd blink.
+  8. **In/Out** — pairs converge then diverge.
+  9. **Random** — random sparkle.
+- **Defaults:** LED port `&H00`; delay tuned for visibility; safe to break any time.
+- **File:** `BYTEGLOW.BAS`
+
+**Run:**
+```text
+C:
+MBASIC
+LOAD "BYTEGLOW.BAS"
+RUN
+```
+
+
 
 ### `LEDLAB10.BAS` — LED Math Lab (10 patterns + cycle mode)
 A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). Pick any of **10** patterns or select **mode 0** to cycle through all of them repeatedly. Press **Q** inside any mode to return to the menu.
@@ -168,6 +197,8 @@ A menu-driven LED playground for SC7xx front-panel LEDs (default port `&H00`). P
   STARFIELD.BAS
   FIBRATIO.BAS
   LEDDEMO.BAS
+  BYTEGLOW.BAS
+
 /forth      # CamelForth words/snippets (fast math + IO)
 /docs       # Notes: port maps, cheatsheets, XMODEM usage, etc.
 /tools      # Batch files or helper scripts (optional)
