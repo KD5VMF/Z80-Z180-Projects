@@ -4,15 +4,11 @@
 40 REM  Each frame chooses a random view and random color palette.
 50 REM  Keys:  Q = quit   (checked each line)
 60 REM ============================================================
-70 ESC$=CHR$(27)+"[": CLS$=ESC$+"2J": HOME$=ESC$+"H": HIDE$=ESC$+"?25l": SHOW$=E
-SC$+"?25h": RST$=ESC$+"0m"
-80 COLS=80: ROWS=24: MAXIT=48        'adjust MAXIT for detail/speed (24..96 reas
-onable)
-90 DIM RX(80)                        'precomputed real-axis coordinates per colu
-mn
+70 ESC$=CHR$(27)+"[": CLS$=ESC$+"2J": HOME$=ESC$+"H": HIDE$=ESC$+"?25l": SHOW$=ESC$+"?25h": RST$=ESC$+"0m"
+80 COLS=80: ROWS=24: MAXIT=48        'adjust MAXIT for detail/speed (24..96 reasonable)
+90 DIM RX(80)                        'precomputed real-axis coordinates per column
 100 DIM PAL$(8)                      'ANSI 30..37 (FG colors)
-110 PAL$(1)="31":PAL$(2)="33":PAL$(3)="32":PAL$(4)="36":PAL$(5)="34":PAL$(6)="35
-":PAL$(7)="37":PAL$(8)="30"
+110 PAL$(1)="31":PAL$(2)="33":PAL$(3)="32":PAL$(4)="36":PAL$(5)="34":PAL$(6)="35":PAL$(7)="37":PAL$(8)="30"
 120 PRINT CLS$;HOME$;HIDE$;
 130 REM ---- Seed randomness from key timing so each run differs ----
 140 PRINT "Press any key to start Mandelbrot ...";
@@ -31,7 +27,7 @@ mn
 270 DX=W/(COLS-1): DY=H/(ROWS-1)
 280 FOR C=1 TO COLS: RX(C)=XMIN+(C-1)*DX: NEXT C
 290 REM ---- Randomize color palette ordering each frame -----------
-300 FOR I=1 TO 16
+300 FOR I=8 TO 2 STEP -1
 310 J=INT(RND(1)*I)+1
 320 TMP$=PAL$(I)
 321 PAL$(I)=PAL$(J)
@@ -54,16 +50,14 @@ mn
 480     ZX=0: ZY=0: IT=0
 490     XX=0: YY=0
 500     IT=IT+1
-510     XX=ZX*ZX: YY=ZY*ZY: IF XX+YY>4 THEN GOTO 520 ELSE ZY=2*ZX*ZY+Y: ZX=XX-YY
-+X: IF IT<MAXIT THEN GOTO 500
+510     XX=ZX*ZX: YY=ZY*ZY: IF XX+YY>4 THEN GOTO 520 ELSE ZY=2*ZX*ZY+Y: ZX=XX-YY+X: IF IT<MAXIT THEN GOTO 500
 520     REM --- Map iteration to character & color -----------------
 530 IF IT=MAXIT THEN CH$=" ": COLIDX=0: GOTO 550
 535 ILEV=INT((IT/MAXIT)*9)+1
 536 IF ILEV<1 THEN ILEV=1
 540 CH$=MID$(" .:-=+*#%@",ILEV,1)
 545 COLIDX=((IT-1)-INT((IT-1)/8)*8)+1
-550     IF COLIDX<>LASTC THEN IF COLIDX=0 THEN PRINT RST$; : LASTC=0 ELSE PRINT
-ESC$;PAL$(COLIDX);"m"; : LASTC=COLIDX
+550     IF COLIDX<>LASTC THEN IF COLIDX=0 THEN PRINT RST$; : LASTC=0 ELSE PRINT ESC$;PAL$(COLIDX);"m"; : LASTC=COLIDX
 560     PRINT CH$;
 570   NEXT C
 580   PRINT RST$;                 'reset color at end of line
