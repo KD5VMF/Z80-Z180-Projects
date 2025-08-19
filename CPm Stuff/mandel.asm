@@ -1,4 +1,4 @@
-;   Found @ https://gist.github.com/jblang/3b17598ccfa0f7e5cca79ad826a399a9
+;   Found @ https://gist.github.com/jblang/3b17598ccfa0f7e5cca79ad826a399a9   - Not Ready for our SCxxx Boards yet. Working on that.
 ;  Compute a Mandelbrot set on a simple Z80 computer.
 ;
 ; From https://rosettacode.org/wiki/Mandelbrot_set#Z80_Assembly
