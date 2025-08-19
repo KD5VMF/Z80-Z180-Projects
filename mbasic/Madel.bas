@@ -1,69 +1,64 @@
 10 REM ============================================================
-20 REM  MANDELBR.BAS  -  ANSI Color Mandelbrot for MBASIC-80 / CP/M
-30 REM  SC7xx Z180 (UART text). 80x24, draws line-by-line forever.
-40 REM  Each frame chooses a random view and random color palette.
-50 REM  Keys:  Q = quit   (checked each line)
-60 REM ============================================================
-70 ESC$=CHR$(27)+"[": CLS$=ESC$+"2J": HOME$=ESC$+"H": HIDE$=ESC$+"?25l": SHOW$=ESC$+"?25h": RST$=ESC$+"0m"
-80 COLS=80: ROWS=24: MAXIT=48        'adjust MAXIT for detail/speed (24..96 reasonable)
-90 DIM RX(80)                        'precomputed real-axis coordinates per column
-100 DIM PAL$(8)                      'ANSI 30..37 (FG colors)
-110 PAL$(1)="31":PAL$(2)="33":PAL$(3)="32":PAL$(4)="36":PAL$(5)="34":PAL$(6)="35":PAL$(7)="37":PAL$(8)="30"
-120 PRINT CLS$;HOME$;HIDE$;
-130 REM ---- Seed randomness from key timing so each run differs ----
-140 PRINT "Press any key to start Mandelbrot ...";
-150 T=0: A$=INKEY$: IF A$="" THEN T=T+1: GOTO 150
-160 X=RND(-T)
-170 PRINT CLS$;HOME$;
-180 REM ===================== MAIN FRAME LOOP ======================
-190 FRAME=FRAME+1
-200 REM ---- Pick a random view window (center & width) ------------
-210 REM Center near interesting bits; width gives zoom (smaller = deeper zoom)
-220 CX=-.75+(RND(1)-.5)*1.6
-230 CY=(RND(1)-.5)*1.4
-240 W=2.8*(.35+RND(1)*.65)       'random width ~0.98..2.8
-250 H=W*(ROWS/COLS)
-260 XMIN=CX-W/2: XMAX=CX+W/2: YMAX=CY+H/2: YMIN=CY-H/2
-270 DX=W/(COLS-1): DY=H/(ROWS-1)
-280 FOR C=1 TO COLS: RX(C)=XMIN+(C-1)*DX: NEXT C
-290 REM ---- Randomize color palette ordering each frame -----------
-300 FOR I=8 TO 2 STEP -1
-310 J=INT(RND(1)*I)+1
-320 TMP$=PAL$(I)
-321 PAL$(I)=PAL$(J)
-322 PAL$(J)=TMP$
-330 NEXT I
-340 REM ---- Clear, Home, tiny header (disabled to maximize speed) -
-350 PRINT ESC$;"2J";ESC$;"H";
-360 REM ==================== RENDER LINES ==========================
-370 FOR R=1 TO ROWS
-380   Y=YMAX-(R-1)*DY
-390   LASTC=-99
-400   FOR C=1 TO COLS
-410     X=RX(C)
-420     REM --- Fast inside tests (cardioid & period-2 bulb) -------
-430     XR=X: YR=Y
-440     Q=(XR-.25)*(XR-.25)+YR*YR
-450     IF Q*(Q+(XR-.25))<.25*YR*YR THEN IT=MAXIT: GOTO 520
-460     IF (XR+1)*(XR+1)+YR*YR<=.0625 THEN IT=MAXIT: GOTO 520
-470     REM --- Iterate z <- z^2 + c --------------------------------
-480     ZX=0: ZY=0: IT=0
-490     XX=0: YY=0
-500     IT=IT+1
-510     XX=ZX*ZX: YY=ZY*ZY: IF XX+YY>4 THEN GOTO 520 ELSE ZY=2*ZX*ZY+Y: ZX=XX-YY+X: IF IT<MAXIT THEN GOTO 500
-520     REM --- Map iteration to character & color -----------------
-530 IF IT=MAXIT THEN CH$=" ": COLIDX=0: GOTO 550
-535 ILEV=INT((IT/MAXIT)*9)+1
-536 IF ILEV<1 THEN ILEV=1
-540 CH$=MID$(" .:-=+*#%@",ILEV,1)
-545 COLIDX=((IT-1)-INT((IT-1)/8)*8)+1
-550     IF COLIDX<>LASTC THEN IF COLIDX=0 THEN PRINT RST$; : LASTC=0 ELSE PRINT ESC$;PAL$(COLIDX);"m"; : LASTC=COLIDX
-560     PRINT CH$;
-570   NEXT C
-580   PRINT RST$;                 'reset color at end of line
-590   REM --- Key check per line: Q to quit ------------------------
-600   K$=INKEY$: IF K$="Q" OR K$="q" THEN PRINT SHOW$;RST$;: END
-610 NEXT R
-620 REM ---- Immediately move to a brand-new random view ----------
-630 GOTO 190
-640 REM ==================== END PROGRAM ===========================
+20 REM  MANDELBG.BAS - ANSI Background Color Mandelbrot (80x24)
+30 REM  SC131 Z180 (UART text). Uses only 7-bit ASCII + ANSI SGR.
+40 REM  Q to quit. Each frame randomizes the color palette.
+50 REM ============================================================
+60 ESC$=CHR$(27)+"[": CLS$=ESC$+"2J": HOME$=ESC$+"H": HIDE$=ESC$+"?25l": SHOW$=ESC$+"?25h": RST$=ESC$+"0m"
+70 COLS=80: ROWS=24: MAXIT=48
+80 DIM RX(80)
+90 DIM PB$(8)              'background colors: 40..47
+100 PB$(1)="41":PB$(2)="43":PB$(3)="42":PB$(4)="46":PB$(5)="44":PB$(6)="45":PB$(7)="47":PB$(8)="40"
+110 PRINT CLS$;HOME$;HIDE$;ESC$;"40m";RST$;
+120 PRINT "Press any key to start Mandelbrot ...";
+130 T=0: A$=INKEY$: IF A$="" THEN T=T+1: GOTO 130
+140 X=RND(-T)
+150 PRINT CLS$;HOME$;ESC$;"40m";RST$;
+
+160 REM ===================== MAIN FRAME LOOP ======================
+170 FR=FR+1
+180 CX=-.75+(RND(1)-.5)*1.6
+190 CY=(RND(1)-.5)*1.4
+200 W=2.8*(.35+RND(1)*.65)
+210 H=W*(ROWS/COLS)
+220 XMIN=CX-W/2: XMAX=CX+W/2: YMAX=CY+H/2: YMIN=CY-H/2
+230 DX=W/(COLS-1): DY=H/(ROWS-1)
+240 FOR C=1 TO COLS: RX(C)=XMIN+(C-1)*DX: NEXT C
+
+250 REM ----- Shuffle background palette each frame -----
+260 FOR I=8 TO 2 STEP -1
+270 J=INT(RND(1)*I)+1
+280 TMP$=PB$(I): PB$(I)=PB$(J): PB$(J)=TMP$
+290 NEXT I
+
+300 PRINT ESC$;"2J";ESC$;"H";ESC$;"40m";
+310 REM ==================== RENDER =====================
+320 FOR R=1 TO ROWS
+330  Y=YMAX-(R-1)*DY
+340  LC=-99
+350  FOR C=1 TO COLS
+360    X=RX(C)
+370    REM ---- cardioid / bulb quick-inside tests ----
+380    XR=X: YR=Y
+390    Q=(XR-.25)*(XR-.25)+YR*YR
+400    IF Q*(Q+(XR-.25))<.25*YR*YR THEN IT=MAXIT: GOTO 450
+410    IF (XR+1)*(XR+1)+YR*YR<=.0625 THEN IT=MAXIT: GOTO 450
+420    REM ---- iterate z <- z^2 + c ----
+430    ZX=0: ZY=0: IT=0: XX=0: YY=0
+440    IT=IT+1
+445    XX=ZX*ZX: YY=ZY*ZY
+446    IF XX+YY>4 THEN 450
+447    ZY=2*ZX*ZY+Y: ZX=XX-YY+X: IF IT<MAXIT THEN GOTO 440
+450    REM ---- map to bg color (space pixel) ----
+460    CI=0
+470    IF IT<MAXIT THEN CI=((IT-1)-INT((IT-1)/8)*8)+1
+480    IF CI<>LC THEN GOSUB 900
+490    PRINT " ";
+500  NEXT C
+510  PRINT RST$;
+520  K$=INKEY$: IF K$="Q" OR K$="q" THEN PRINT SHOW$;RST$;: END
+530 NEXT R
+540 GOTO 170
+
+900 REM ---- SETCOLOR: uses CI, updates LC ----
+910 IF CI=0 THEN PRINT ESC$;"40m";: LC=0: RETURN
+920 PRINT ESC$;PB$(CI);"m";: LC=CI: RETURN
