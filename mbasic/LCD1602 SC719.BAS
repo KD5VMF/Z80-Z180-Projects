@@ -96,7 +96,7 @@
 
 6100 ' print prime on line 0
 6110 N=PN: GOSUB 5000: C=6: R=0: S$=PAD$: GOSUB 480
-6120 FOR T=1 TO 2000: NEXT T   ' adjust delay for human viewing
+6120 FOR T=1 TO 1000: NEXT T   ' adjust delay for human viewing
 6130 RETURN
 
 7000 '===== primality test =====
