@@ -85,4 +85,4 @@
 9150 BPN$=MID$(STR$(BESTPN),2)
 9160 V4=INT(AVG*10000+.5)/10000: VS$=MID$(STR$(V4),2)
 9170 PRINT ">> n=";NS$;"  s*=";BS$;"@";BN$;"  p*=";BP$;"@";BPN$;"  avg=";VS$
-9180 RETURN
+9180 RETURN
