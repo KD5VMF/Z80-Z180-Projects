@@ -1,6 +1,6 @@
 10 REM === LCD1602 via SC719 (0xAA) b PRIME DISPLAY, 10-DIGIT RIGHT ALIGNED ===
 20 REM SC700 / Z180 with SC719 I/O card. RS=P2, E=P3, D4..D7=P4..P7, RW=GND
-30 DEFINT A-Z: DEFDBL P,N,X,D
+30 DEFINT A-Z: DEFDBL P,N,X,D,S
 40 PT=&HAA               ' SC719 output port (default)
 50 K=0
 60 RV=0                  ' 0=normal bit order, 1=reversed on P4..P7
@@ -9,6 +9,8 @@
 90 EM=&H8                ' E  on P3
 100 DM=&HF0              ' data nibble on P4..P7
 110 BU=0: OUT PT,BU
+115 INPUT "Start from number"; ST
+116 IF ST<2 THEN ST=2
 120 GOSUB 3000           ' init LCD (clear once, blink off)
 130 ' no header text
 140 GOSUB 6000           ' prime generator
@@ -25,8 +27,7 @@
 250 ' write 4-bit nibble NB with RS flag FL (0=cmd,1=data)
 260 IF FL THEN BU=BU OR RM ELSE BU=BU AND (255-RM)
 270 NB=NB AND &HF
-280 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8
-)+((NB AND 8)*2)
+280 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8)+((NB AND 8)*2)
 290 BU=(BU AND (255-DM)) OR VV
 300 OUT PT,BU: GOSUB 200
 310 BU=BU OR EM: OUT PT,BU: GOSUB 200
@@ -67,10 +68,10 @@
 5020 PAD$=STRING$(10-LEN(S$)," ")+S$
 5030 RETURN
 6000 '===== prime loop =====
-6010 PN=2
+6010 PN=ST
 6020 IF PN<2 THEN PN=2
 6030 GOSUB 7000: IF IS THEN GOSUB 6100
-6040 IF PN=2 THEN PN=3 ELSE PN=PN+2
+6040 IF PN=2 THEN PN=3 ELSE IF (PN/2=INT(PN/2)) THEN PN=PN+1 ELSE PN=PN+2
 6050 GOTO 6030
 6100 ' print prime right-aligned in 10-char field at col 6
 6110 N=PN: GOSUB 5000: C=6: R=0: S$=PAD$: GOSUB 480
