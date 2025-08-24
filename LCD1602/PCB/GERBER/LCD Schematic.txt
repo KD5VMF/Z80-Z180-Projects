@@ -1,0 +1,79 @@
+M48
+;
+; Format:               Excellon NC Drill Ascii
+; This File Name:       LCD Schematic.txt
+; Source File Name:     LCD Schematic.rrb
+; Unique ID:            95888e2a-6d13-42d3-a865-246b4b79fe9a
+; Generated Date:       Sunday, 24 August 2025 11:43:30
+;
+; Created Using:        Robot Room Copper Connection v2.7.5443
+; Software Contact:     http://www.robotroom.com/CopperConnection/Support.aspx
+; License Number:       1685
+; Student Edition:      true
+;
+; Zero Suppression:     Trailing
+; Number Precision:     2.4
+;
+FMAT,2
+INCH,LZ
+T01C.029
+T02C.035
+T03C.04
+T04C.125
+%
+T01
+X00113Y00346
+X00213
+X00396Y00348
+X00496
+X00725Y00375
+X00975
+X014Y004
+X017Y003
+X019Y004
+X0175Y01175
+X015
+T02
+X00325Y006
+X00425
+X00525
+X00625
+X00725
+X00825
+X00925
+X01025
+X01125
+X01225
+X01325
+X01425
+X01525
+X01625
+X01725
+X01825
+X01225Y01075
+X01125
+X01025
+X00925
+X00825
+X00725
+X00625
+Y01175
+X00725
+X00825
+X00925
+X01025
+X01125
+X01225
+T03
+X00075Y00875
+X00475
+X016Y00975
+X017
+X018
+T04
+X00125Y001
+X001Y006
+X00125Y01175
+X01925
+Y001
+M30
