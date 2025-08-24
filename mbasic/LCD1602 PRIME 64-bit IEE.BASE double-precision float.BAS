@@ -2,7 +2,7 @@
 20 REM SC700 / Z180 with SC719 I/O card. RS=P2, E=P3, D4..D7=P4..P7, RW=GND
 30 DEFINT A-Z: DEFDBL P,N,X,D
 40 PT=&HAA               ' SC719 output port (default)
-50 K=1                   ' timing scale: raise to 2 if LCD misses chars
+50 K=0
 60 RV=0                  ' 0=normal bit order, 1=reversed on P4..P7
 70 '---- bit masks (2-char significance in MBASIC) ----
 80 RM=&H4                ' RS on P2
@@ -25,8 +25,7 @@
 250 ' write 4-bit nibble NB with RS flag FL (0=cmd,1=data)
 260 IF FL THEN BU=BU OR RM ELSE BU=BU AND (255-RM)
 270 NB=NB AND &HF
-280 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8
-)+((NB AND 8)*2)
+280 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8)+((NB AND 8)*2)
 290 BU=(BU AND (255-DM)) OR VV
 300 OUT PT,BU: GOSUB 200
 310 BU=BU OR EM: OUT PT,BU: GOSUB 200
@@ -74,7 +73,7 @@
 6050 GOTO 6030
 6100 ' print prime right-aligned in 10-char field at col 6
 6110 N=PN: GOSUB 5000: C=6: R=0: S$=PAD$: GOSUB 480
-6120 FOR T=1 TO 2000: NEXT T   ' adjust delay for visible speed
+6120 FOR T=1 TO 100: NEXT T ' adjust delay for visual speed
 6130 RETURN
 7000 '===== primality test (double-safe, no MOD) =====
 7010 IF PN<2 THEN IS=0: RETURN
@@ -83,9 +82,9 @@
 7040 IF (PN/3=INT(PN/3)) OR (PN/5=INT(PN/5)) THEN IS=0: RETURN
 7050 LM=INT(SQR(PN))
 7060 IS=1
-7070 FOR DV% = 7 TO LM STEP 2
-7080   IF PN/DV% = INT(PN/DV%) THEN IS=0: RETURN  ' divisible by DV%
-7090 NEXT DV%
-7100 RETURN
-7110 NEXT DV
+7070 FOR DV% = 7 TO LM STEP 6
+7080   IF PN/DV% = INT(PN/DV%) THEN IS=0: RETURN
+7090   IF PN/(DV%+2) = INT(PN/(DV%+2)) THEN IS=0: RETURN
+7100 NEXT DV%
+7110 RETURN
 7120 RETURN
