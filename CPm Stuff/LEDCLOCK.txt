@@ -1,158 +1,205 @@
+; ==============================================================
 ; TIME719Q.ASM — 8080 mnemonics, CP/M + RomWBW HBIOS + SC719
-; Top-left clock (one line), LEDs show seconds on SC719 @ DIO_BASE.
-; Q or q quits (restores cursor, LEDs off).
+; --------------------------------------------------------------
+; Features:
+;   * Reads the real-time clock (SC727 module) via RomWBW HBIOS
+;   * Displays date/time at top left of the console, one line only
+;   * Updates every second without scrolling
+;   * Mirrors the seconds value (0–59) to the SC719 LED outputs
+;   * Press Q or q to quit: LEDs cleared, cursor restored
+;
+; Hardware:
+;   - RTC: SC727 RTC module at I/O base C0h (handled by HBIOS)
+;   - LED: SC719 Digital I/O module, base address selectable via JP1
+;
+; Notes:
+;   - All HBIOS device access is via CALL RST 1 (vector 0008h).
+;   - The RTC is not accessed directly by port; HBIOS abstracts it.
+;   - The SC719 LEDs are mapped to a base I/O port. Default: 00h.
+; ===============================================================
 
-BDOS        EQU 0005H
-CONOUT      EQU 2
+BDOS        EQU 0005H        ; CP/M BDOS entry
+CONOUT      EQU 2            ; BDOS function 2: console output
 
 ; ====== CONFIGURE YOUR SC719 I/O BASE ADDRESS HERE ======
-; JP1 on SC719 sets the base I/O port; typical default is 00h.
+; JP1 on SC719 sets the base I/O port. Default with no jumpers = 00h.
+; Examples: DIO_BASE EQU 00H (default), 01H, 20H, A0H, etc.
 DIO_BASE    EQU 00H
 
-; LED polarity: 00H for active-high, 0FFH for active-low
+; LED polarity: 00H if active-high (LED on = logic 1),
+;               0FFH if active-low (LED on = logic 0).
 INVERT_XOR  EQU 00H
 
-            ORG 0100H
+            ORG 0100H        ; CP/M COM files start at 0100h
 
+; ===============================================================
+; Program Entry
+; ===============================================================
 START:
-            ; Clear + home + hide cursor
-            LXI  D,ESC2J
+            ; Clear screen, home cursor, hide cursor
+            LXI  D,ESC2J     ; ESC[2J$  (clear screen)
             MVI  C,9
             CALL BDOS
-            LXI  D,HOME
+            LXI  D,HOME      ; ESC[H$   (cursor home)
             MVI  C,9
             CALL BDOS
-            LXI  D,HIDECUR
+            LXI  D,HIDECUR   ; ESC[?25l$ (hide cursor)
             MVI  C,9
             CALL BDOS
 
-            ; Self-test LEDs: 55 -> AA -> FF -> 00
-            MVI  A,055H
+            ; --- LED self-test: pattern to verify wiring & address ---
+            MVI  A,055H      ; 01010101
             CALL LEDOUT
             CALL SHORTDLY
-            MVI  A,0AAH
+            MVI  A,0AAH      ; 10101010
             CALL LEDOUT
             CALL SHORTDLY
-            MVI  A,0FFH
+            MVI  A,0FFH      ; all on
             CALL LEDOUT
             CALL SHORTDLY
-            XRA  A
+            XRA  A           ; 00h = all off
             CALL LEDOUT
             CALL SHORTDLY
 
+; ===============================================================
+; Main loop: update display and LEDs once per second
+; ===============================================================
 MAIN:
-            ; Home cursor for in-place update
+            ; Reset cursor to top-left each cycle
             LXI  D,HOME
             MVI  C,9
             CALL BDOS
 
-            CALL READRTC            ; TIMBUF = BCD YY MM DD HH MM SS
-            LDA  TIMBUF+5
-            STA  SEC0               ; remember current seconds
+            CALL READRTC             ; fetch current RTC values
+            LDA  TIMBUF+5            ; seconds (BCD)
+            STA  SEC0                ; remember for tick change
 
-            CALL PRINTDT            ; show YYYY-MM-DD HH:MM:SS (no CR/LF)
-            CALL WRITELED           ; mirror seconds to LEDs @ DIO_BASE
+            CALL PRINTDT             ; print formatted date/time
+            CALL WRITELED            ; send seconds to LEDs
 
+; --- Wait for seconds to change before repeating ---
 WAITNEXT:
-            ; non-blocking quit?
-            CALL KEYCHECK
+            CALL KEYCHECK            ; check keyboard
             ORA  A
             JZ   WN1
-            ANI  5FH                ; uppercase
-            CPI  'Q'
+            ANI  5FH                 ; normalize to uppercase
+            CPI  'Q'                 ; quit key?
             JZ   QUIT
 WN1:
             CALL SHORTDLY
             CALL READRTC
-            LDA  TIMBUF+5           ; A = current seconds (BCD)
-            MOV  D,A                ; save current in D
-            LDA  SEC0               ; A = previous seconds (BCD)
-            CMP  D                  ; changed yet?
-            JZ   WAITNEXT
+            LDA  TIMBUF+5            ; new seconds (BCD)
+            MOV  D,A                 ; save in D
+            LDA  SEC0                ; old seconds
+            CMP  D
+            JZ   WAITNEXT            ; still same second → keep waiting
             MOV  A,D
-            STA  SEC0
+            STA  SEC0                ; update
             JMP  MAIN
 
+; ===============================================================
+; Quit sequence
+; ===============================================================
 QUIT:
-            XRA  A                  ; LEDs off (handled via LEDOUT inversion)
-            CALL LEDOUT
-            LXI  D,SHOWCUR          ; show cursor
+            XRA  A
+            CALL LEDOUT              ; clear LEDs
+            LXI  D,SHOWCUR           ; restore cursor
             MVI  C,9
             CALL BDOS
-            MVI  E,13               ; CR
-            CALL PCHAR
-            MVI  E,10               ; LF
-            CALL PCHAR
+            MVI  E,13
+            CALL PCHAR               ; CR
+            MVI  E,10
+            CALL PCHAR               ; LF
             RET
 
-; --- HBIOS RTCGETTIM (B=20h, HL=buffer), entry 0008h (RST 1) ---
-; Returns TIMBUF = YY,MM,DD,HH,MM,SS  (all BCD)
+; ===============================================================
+; HBIOS RTC Access
+; ===============================================================
+; HBIOS function: RTCGETTIM (B=20h, HL=buffer, RST 1)
+; Returns 6 BCD bytes in buffer: YY,MM,DD,HH,MM,SS
+; (RomWBW handles actual RTC I/O at port C0h internally)
+; ===============================================================
 READRTC:    LXI  H,TIMBUF
             MVI  B,020H
             RST  1
             RET
 
-; --- Print YYYY-MM-DD HH:MM:SS (no CR/LF) ---
+; ===============================================================
+; Display date/time: YYYY-MM-DD HH:MM:SS
+; ===============================================================
 PRINTDT:    MVI  E,'2'
             CALL PCHAR
             MVI  E,'0'
             CALL PCHAR
-            LDA  TIMBUF+0           ; YY
+            LDA  TIMBUF+0            ; year (YY)
             CALL P2DIG
             MVI  E,'-'
             CALL PCHAR
-            LDA  TIMBUF+1           ; MM
+            LDA  TIMBUF+1            ; month
             CALL P2DIG
             MVI  E,'-'
             CALL PCHAR
-            LDA  TIMBUF+2           ; DD
+            LDA  TIMBUF+2            ; day
             CALL P2DIG
             MVI  E,' '
             CALL PCHAR
-            LDA  TIMBUF+3           ; HH
+            LDA  TIMBUF+3            ; hour
             CALL P2DIG
             MVI  E,':'
             CALL PCHAR
-            LDA  TIMBUF+4           ; MM
+            LDA  TIMBUF+4            ; minute
             CALL P2DIG
             MVI  E,':'
             CALL PCHAR
-            LDA  TIMBUF+5           ; SS
+            LDA  TIMBUF+5            ; second
             CALL P2DIG
             RET
 
-; --- Seconds to LEDs: BCD SS -> binary 0..59, then OUT DIO_BASE ---
+; ===============================================================
+; Write seconds to SC719 LEDs
+; ===============================================================
+; TIMBUF+5 holds seconds in BCD: e.g. 0x25 = 25 sec.
+; Convert to binary 0..59 and output to SC719.
+; ===============================================================
 WRITELED:
-            LDA  TIMBUF+5           ; BCD seconds
+            LDA  TIMBUF+5            ; BCD seconds
             MOV  D,A
-            ANI  00FH               ; ones -> A
-            MOV  E,A                ; E = ones
+            ANI  0FH                 ; ones digit
+            MOV  E,A                 ; E = ones
             MOV  A,D
-            ANI  0F0H               ; tens * 16
+            ANI  0F0H                ; tens nibble
             RRC
             RRC
             RRC
-            RRC                     ; A = tens (0..5)
-            MOV  B,A                ; B = tens
-            ; A = tens*10 = (t<<3) + (t<<1)
+            RRC                      ; A = tens
+            MOV  B,A                 ; B = tens
+            ; Compute seconds = tens*10 + ones
             MOV  A,B
-            ADD  A                  ; 2*t
-            MOV  C,A                ; C = 2*t
+            ADD  A                   ; A = 2*t
+            MOV  C,A
             MOV  A,B
-            ADD  A                  ; 2*t
-            ADD  A                  ; 4*t
-            ADD  A                  ; 8*t
-            ADD  C                  ; 10*t
-            ADD  E                  ; + ones
+            ADD  A                   ; 2*t
+            ADD  A                   ; 4*t
+            ADD  A                   ; 8*t
+            ADD  C                   ; 10*t
+            ADD  E                   ; + ones
             ; fallthrough to LEDOUT with A
 
-; --- LEDOUT: write A to SC719 (applies optional inversion) ---
+; ===============================================================
+; LEDOUT: write A to SC719 outputs
+; ===============================================================
+; SC719 base I/O port = DIO_BASE (JP1 selectable).
+; OUT writes directly to 8-bit latch driving LEDs.
+; ===============================================================
 LEDOUT:
-            XRI  INVERT_XOR         ; set to 0FFH if active-low LEDs
-            OUT  DIO_BASE           ; <-- SC719 base I/O address (JP1)
+            XRI  INVERT_XOR          ; apply optional inversion
+            OUT  DIO_BASE            ; send to SC719
             RET
 
-; --- Non-blocking console read: BDOS 6, E=FFh (A=char or 0) ---
+; ===============================================================
+; KEYCHECK: non-blocking key read (BDOS 6, E=0FFh)
+; Returns: A=0 if no key; else ASCII char
+; ===============================================================
 KEYCHECK:
             PUSH B
             PUSH D
@@ -165,8 +212,10 @@ KEYCHECK:
             MOV  A,L
             RET
 
-; --- A=BCD -> print two ASCII digits (protect from BDOS clobber) ---
-P2DIG:      CALL BCD2ASC            ; H=tens ASCII, L=ones ASCII
+; ===============================================================
+; Helper routines: BCD→ASCII, Console output, Delay
+; ===============================================================
+P2DIG:      CALL BCD2ASC             ; A=BCD -> HL=ASCII digits
             MOV  A,H
             STA  DIGTMP
             MOV  A,L
@@ -179,13 +228,12 @@ P2DIG:      CALL BCD2ASC            ; H=tens ASCII, L=ones ASCII
             CALL PCHAR
             RET
 
-; --- BCD -> ASCII pair in H,L ---
 BCD2ASC:    MOV  D,A
-            ANI  00FH               ; ones
+            ANI  0FH
             ADI  '0'
             MOV  L,A
             MOV  A,D
-            ANI  0F0H               ; tens
+            ANI  0F0H
             RRC
             RRC
             RRC
@@ -194,33 +242,35 @@ BCD2ASC:    MOV  D,A
             MOV  H,A
             RET
 
-; --- BDOS char out (E) ---
 PCHAR:      MVI  C,CONOUT
             CALL BDOS
             RET
 
-; --- short delay (self-test & tick wait idle) ---
-SHORTDLY:   LXI  H,2000H
+SHORTDLY:   LXI  H,2000H             ; short delay
 SD1:        DCX  H
             MOV  A,H
             ORA  L
             JNZ  SD1
             RET
 
-; --- Data ---
-TIMBUF:     DS   6                  ; YY MM DD HH MM SS (BCD)
-DIGTMP:     DS   2
-SEC0:       DB   00H
+; ===============================================================
+; Data storage
+; ===============================================================
+TIMBUF:     DS   6                   ; RTC values YY,MM,DD,HH,MM,SS
+DIGTMP:     DS   2                   ; temp buffer for ASCII
+SEC0:       DB   00H                 ; previous seconds
 
-; --- ANSI escape strings (BDOS 9, $-terminated) ---
+; ===============================================================
+; ANSI escape sequences ($-terminated for BDOS 9)
+; ===============================================================
 ESC2J:      DB  1BH,'[','2','J','$'     ; clear screen
-HOME:       DB  1BH,'[','H','$'         ; cursor to 1;1
+HOME:       DB  1BH,'[','H','$'         ; cursor home
 HIDECUR:    DB  1BH,'?','2','5','l','$' ; hide cursor
 SHOWCUR:    DB  1BH,'?','2','5','h','$' ; show cursor
 
             END START
 
-*********************************************************************************************************************
+*************************************************************************************
 
 :100100001149020E09CD0500114E020E09CD050060
 :100110001152020E09CD05003E55CDF201CD360239
