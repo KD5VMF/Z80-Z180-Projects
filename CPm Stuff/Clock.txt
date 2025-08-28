@@ -1,0 +1,143 @@
+; TIME.ASM — 8080 mnemonics, CP/M + RomWBW HBIOS
+; Shows time at the top-left on one line, updating each second.
+
+BDOS    EQU 0005H
+CONOUT  EQU 2
+
+            ORG 0100H
+
+START:
+            ; Clear screen + home + hide cursor
+            LXI  D,ESC2J
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HOME
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HIDECUR
+            MVI  C,9
+            CALL BDOS
+
+MAIN:
+            ; Move cursor to 1;1 each update
+            LXI  D,HOME
+            MVI  C,9
+            CALL BDOS
+
+            CALL READRTC              ; fills TIMBUF (BCD: YY MM DD HH MM SS)
+            CALL PRINTDT              ; prints without CR/LF
+            CALL DELAY1S
+            JMP  MAIN
+
+; --- HBIOS: RTCGETTIM (B=20h, HL=buffer), entry at 0008h ---
+READRTC:    LXI  H,TIMBUF
+            MVI  B,020H
+            RST  1
+            RET
+
+; --- Print YYYY-MM-DD HH:MM:SS (no CR/LF) ---
+PRINTDT:    MVI  E,'2'                ; "20"
+            CALL PCHAR
+            MVI  E,'0'
+            CALL PCHAR
+
+            LDA  TIMBUF+0             ; YY
+            CALL P2DIG
+            MVI  E,'-'
+            CALL PCHAR
+
+            LDA  TIMBUF+1             ; MM
+            CALL P2DIG
+            MVI  E,'-'
+            CALL PCHAR
+
+            LDA  TIMBUF+2             ; DD
+            CALL P2DIG
+            MVI  E,' '
+            CALL PCHAR
+
+            LDA  TIMBUF+3             ; HH
+            CALL P2DIG
+            MVI  E,':'
+            CALL PCHAR
+
+            LDA  TIMBUF+4             ; MM
+            CALL P2DIG
+            MVI  E,':'
+            CALL PCHAR
+
+            LDA  TIMBUF+5             ; SS
+            CALL P2DIG
+            RET
+
+; --- A=BCD -> print two ASCII digits (store to mem so BDOS can't clobber) ---
+P2DIG:      CALL BCD2ASC              ; H=tens ASCII, L=ones ASCII
+            MOV  A,H
+            STA  DIGTMP               ; save tens
+            MOV  A,L
+            STA  DIGTMP+1             ; save ones
+            LDA  DIGTMP
+            MOV  E,A
+            CALL PCHAR
+            LDA  DIGTMP+1
+            MOV  E,A
+            CALL PCHAR
+            RET
+
+; --- BCD -> ASCII pair in H,L ---
+BCD2ASC:    MOV  D,A
+            ANI  00FH                 ; ones
+            ADI  '0'
+            MOV  L,A
+            MOV  A,D
+            ANI  0F0H                 ; tens
+            RRC
+            RRC
+            RRC
+            RRC
+            ADI  '0'
+            MOV  H,A
+            RET
+
+; --- BDOS char out (E) ---
+PCHAR:      MVI  C,CONOUT
+            CALL BDOS
+            RET
+
+; --- crude ~1s delay at ~7.37 MHz ---
+DELAY1S:    LXI  H,0FFFFH
+DLY1:       DCX  H
+            MOV  A,H
+            ORA  L
+            JNZ  DLY1
+            RET
+
+; --- Data areas ---
+TIMBUF:     DS   6                    ; YY MM DD HH MM SS (BCD)
+DIGTMP:     DS   2
+
+; --- ANSI escape strings (CP/M BDOS 9 uses $-terminated strings) ---
+ESC2J:      DB  1BH,'[','2','J','$'   ; clear screen
+HOME:       DB  1BH,'[','H','$'       ; cursor to 1;1
+HIDECUR:    DB  1BH,'?','2','5','l','$' ; hide cursor
+; SHOWCUR:  DB  1BH,'?','2','5','h','$' ; (if you add a quit path)
+
+            END START
+
+
+**************************************************************************************************************************
+
+:1001000011BE010E09CD050011C3010E09CD050078
+:1001100011C7010E09CD050011C3010E09CD05005F
+:10012000CD2C01CD3301CDAC01C3180121B60106A0
+:1001300020CFC91E32CDA6011E30CDA6013AB60190
+:10014000CD7B011E2DCDA6013AB701CD7B011E2D21
+:10015000CDA6013AB801CD7B011E20CDA6013AB94A
+:1001600001CD7B011E3ACDA6013ABA01CD7B011E1D
+:100170003ACDA6013ABB01CD7B01C9CD95017C32B8
+:10018000BC017D32BD013ABC015FCDA6013ABD0183
+:100190005FCDA601C957E60FC6306F7AE6F00F0FA4
+:1001A0000F0FC63067C90E02CD0500C921FFFF2B16
+:0601B0007CB5C2AF01C9DD
+:0F01BE001B5B324A241B5B48241B3F32356C24E9
+:00000001FF
