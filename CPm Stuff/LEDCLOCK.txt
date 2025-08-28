@@ -1,0 +1,247 @@
+; TIME719Q.ASM — 8080 mnemonics, CP/M + RomWBW HBIOS + SC719
+; Top-left clock (one line), LEDs show seconds on SC719 @ DIO_BASE.
+; Q or q quits (restores cursor, LEDs off).
+
+BDOS        EQU 0005H
+CONOUT      EQU 2
+
+; ====== CONFIGURE YOUR SC719 I/O BASE ADDRESS HERE ======
+; JP1 on SC719 sets the base I/O port; typical default is 00h.
+DIO_BASE    EQU 00H
+
+; LED polarity: 00H for active-high, 0FFH for active-low
+INVERT_XOR  EQU 00H
+
+            ORG 0100H
+
+START:
+            ; Clear + home + hide cursor
+            LXI  D,ESC2J
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HOME
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HIDECUR
+            MVI  C,9
+            CALL BDOS
+
+            ; Self-test LEDs: 55 -> AA -> FF -> 00
+            MVI  A,055H
+            CALL LEDOUT
+            CALL SHORTDLY
+            MVI  A,0AAH
+            CALL LEDOUT
+            CALL SHORTDLY
+            MVI  A,0FFH
+            CALL LEDOUT
+            CALL SHORTDLY
+            XRA  A
+            CALL LEDOUT
+            CALL SHORTDLY
+
+MAIN:
+            ; Home cursor for in-place update
+            LXI  D,HOME
+            MVI  C,9
+            CALL BDOS
+
+            CALL READRTC            ; TIMBUF = BCD YY MM DD HH MM SS
+            LDA  TIMBUF+5
+            STA  SEC0               ; remember current seconds
+
+            CALL PRINTDT            ; show YYYY-MM-DD HH:MM:SS (no CR/LF)
+            CALL WRITELED           ; mirror seconds to LEDs @ DIO_BASE
+
+WAITNEXT:
+            ; non-blocking quit?
+            CALL KEYCHECK
+            ORA  A
+            JZ   WN1
+            ANI  5FH                ; uppercase
+            CPI  'Q'
+            JZ   QUIT
+WN1:
+            CALL SHORTDLY
+            CALL READRTC
+            LDA  TIMBUF+5           ; A = current seconds (BCD)
+            MOV  D,A                ; save current in D
+            LDA  SEC0               ; A = previous seconds (BCD)
+            CMP  D                  ; changed yet?
+            JZ   WAITNEXT
+            MOV  A,D
+            STA  SEC0
+            JMP  MAIN
+
+QUIT:
+            XRA  A                  ; LEDs off (handled via LEDOUT inversion)
+            CALL LEDOUT
+            LXI  D,SHOWCUR          ; show cursor
+            MVI  C,9
+            CALL BDOS
+            MVI  E,13               ; CR
+            CALL PCHAR
+            MVI  E,10               ; LF
+            CALL PCHAR
+            RET
+
+; --- HBIOS RTCGETTIM (B=20h, HL=buffer), entry 0008h (RST 1) ---
+; Returns TIMBUF = YY,MM,DD,HH,MM,SS  (all BCD)
+READRTC:    LXI  H,TIMBUF
+            MVI  B,020H
+            RST  1
+            RET
+
+; --- Print YYYY-MM-DD HH:MM:SS (no CR/LF) ---
+PRINTDT:    MVI  E,'2'
+            CALL PCHAR
+            MVI  E,'0'
+            CALL PCHAR
+            LDA  TIMBUF+0           ; YY
+            CALL P2DIG
+            MVI  E,'-'
+            CALL PCHAR
+            LDA  TIMBUF+1           ; MM
+            CALL P2DIG
+            MVI  E,'-'
+            CALL PCHAR
+            LDA  TIMBUF+2           ; DD
+            CALL P2DIG
+            MVI  E,' '
+            CALL PCHAR
+            LDA  TIMBUF+3           ; HH
+            CALL P2DIG
+            MVI  E,':'
+            CALL PCHAR
+            LDA  TIMBUF+4           ; MM
+            CALL P2DIG
+            MVI  E,':'
+            CALL PCHAR
+            LDA  TIMBUF+5           ; SS
+            CALL P2DIG
+            RET
+
+; --- Seconds to LEDs: BCD SS -> binary 0..59, then OUT DIO_BASE ---
+WRITELED:
+            LDA  TIMBUF+5           ; BCD seconds
+            MOV  D,A
+            ANI  00FH               ; ones -> A
+            MOV  E,A                ; E = ones
+            MOV  A,D
+            ANI  0F0H               ; tens * 16
+            RRC
+            RRC
+            RRC
+            RRC                     ; A = tens (0..5)
+            MOV  B,A                ; B = tens
+            ; A = tens*10 = (t<<3) + (t<<1)
+            MOV  A,B
+            ADD  A                  ; 2*t
+            MOV  C,A                ; C = 2*t
+            MOV  A,B
+            ADD  A                  ; 2*t
+            ADD  A                  ; 4*t
+            ADD  A                  ; 8*t
+            ADD  C                  ; 10*t
+            ADD  E                  ; + ones
+            ; fallthrough to LEDOUT with A
+
+; --- LEDOUT: write A to SC719 (applies optional inversion) ---
+LEDOUT:
+            XRI  INVERT_XOR         ; set to 0FFH if active-low LEDs
+            OUT  DIO_BASE           ; <-- SC719 base I/O address (JP1)
+            RET
+
+; --- Non-blocking console read: BDOS 6, E=FFh (A=char or 0) ---
+KEYCHECK:
+            PUSH B
+            PUSH D
+            MVI  C,6
+            MVI  E,0FFH
+            CALL BDOS
+            MOV  L,A
+            POP  D
+            POP  B
+            MOV  A,L
+            RET
+
+; --- A=BCD -> print two ASCII digits (protect from BDOS clobber) ---
+P2DIG:      CALL BCD2ASC            ; H=tens ASCII, L=ones ASCII
+            MOV  A,H
+            STA  DIGTMP
+            MOV  A,L
+            STA  DIGTMP+1
+            LDA  DIGTMP
+            MOV  E,A
+            CALL PCHAR
+            LDA  DIGTMP+1
+            MOV  E,A
+            CALL PCHAR
+            RET
+
+; --- BCD -> ASCII pair in H,L ---
+BCD2ASC:    MOV  D,A
+            ANI  00FH               ; ones
+            ADI  '0'
+            MOV  L,A
+            MOV  A,D
+            ANI  0F0H               ; tens
+            RRC
+            RRC
+            RRC
+            RRC
+            ADI  '0'
+            MOV  H,A
+            RET
+
+; --- BDOS char out (E) ---
+PCHAR:      MVI  C,CONOUT
+            CALL BDOS
+            RET
+
+; --- short delay (self-test & tick wait idle) ---
+SHORTDLY:   LXI  H,2000H
+SD1:        DCX  H
+            MOV  A,H
+            ORA  L
+            JNZ  SD1
+            RET
+
+; --- Data ---
+TIMBUF:     DS   6                  ; YY MM DD HH MM SS (BCD)
+DIGTMP:     DS   2
+SEC0:       DB   00H
+
+; --- ANSI escape strings (BDOS 9, $-terminated) ---
+ESC2J:      DB  1BH,'[','2','J','$'     ; clear screen
+HOME:       DB  1BH,'[','H','$'         ; cursor to 1;1
+HIDECUR:    DB  1BH,'?','2','5','l','$' ; hide cursor
+SHOWCUR:    DB  1BH,'?','2','5','h','$' ; show cursor
+
+            END START
+
+*********************************************************************************************************************
+
+:100100001149020E09CD0500114E020E09CD050060
+:100110001152020E09CD05003E55CDF201CD360239
+:100120003EAACDF201CD36023EFFCDF201CD360220
+:10013000AFCDF201CD3602114E020E09CD0500CD34
+:100140008B013A4502324802CD9201CDDA01CDF75A
+:1001500001B7CA5C01E65FFE51CA7401CD3602CD1B
+:100160008B013A4502573A4802BACA4E017A3248E0
+:1001700002C33701AFCDF2011158020E09CD0500BF
+:100180001E0DCD30021E0ACD3002C92140020620CC
+:10019000CFC91E32CD30021E30CD30023A4002CDE2
+:1001A00005021E2DCD30023A4102CD05021E2DCD95
+:1001B00030023A4202CD05021E20CD30023A4302FF
+:1001C000CD05021E3ACD30023A4402CD05021E3A58
+:1001D000CD30023A4502CD0502C93A450257E60F35
+:1001E0005F7AE6F00F0F0F0F4778874F7887878782
+:1001F0008183EE00D300C9C5D50E061EFFCD0500D4
+:100200006FD1C17DC9CD1F027C3246027D324702CB
+:100210003A46025FCD30023A47025FCD3002C957FD
+:10022000E60FC6306F7AE6F00F0F0F0FC63067C9C2
+:100230000E02CD0500C92100202B7CB5C23902C9B0
+:10024800001B5B324A241B5B48241B3F32356C245D
+:060258001B3F3235682453
+:00000001FF
