@@ -1,0 +1,763 @@
+; =====================================================================
+; DSKBRTC.ASM — Disk Speed Benchmark using RTC (SC727)  [8080-only]
+; ---------------------------------------------------------------------
+; - Requires RomWBW HBIOS + SC727 (DS1302) RTC
+; - Uses HBIOS RTCGETTIM (B=20h, RST 1) to time >= 1s per phase
+; - Progress: one dot per 4 KB written/read
+; - Reports seconds and KB/s, then deletes the test file
+; - Strict Intel 8080 mnemonics; ASM.COM compatible
+; =====================================================================
+
+BDOS        EQU 0005H
+CONOUT      EQU 2
+RSTHB       EQU 0008H          ; HBIOS entry (RST 1 vector)
+
+; HBIOS RTCGETTIM:
+;   IN : B=20h, HL=TIMBUF (6 bytes)
+;   OUT: TIMBUF = [YY,MM,DD,HH,MM,SS] (BCD), A=status (00=OK)
+
+; ---- Tunables ----
+CHUNK_RECS   EQU 32            ; 32 * 128B = 4096 bytes per dot
+MAX_CHUNKS   EQU 2048          ; safety cap (~8 MB total if hit)
+
+            ORG 0100H
+
+START:
+            ; Clear screen + header
+            LXI  D,MSG_HDR
+            MVI  C,9
+            CALL BDOS
+
+            ; Check RTC
+            CALL RTC_READ
+            ORA  A
+            JZ   RTC_OK
+            LXI  D,MSG_RTCERR
+            MVI  C,9
+            CALL BDOS
+            RET
+RTC_OK:
+
+            ; Remove any old file
+            LXI  D,FCB
+            MVI  C,19          ; Delete
+            CALL BDOS
+
+; -------------------------
+; WRITE PHASE
+; -------------------------
+            LXI  D,MSG_MAKE
+            MVI  C,9
+            CALL BDOS
+            LXI  D,FCB
+            MVI  C,22          ; Make file
+            CALL BDOS
+
+            ; Fill 4 KB buffer with A5h
+            MVI  A,0A5H
+            LXI  H,BUF
+            LXI  B,1000H       ; 4096 bytes
+FILLW:      MOV  M,A
+            INX  H
+            DCX  B
+            MOV  A,B
+            ORA  C
+            JNZ  FILLW
+
+            LXI  D,MSG_WR
+            MVI  C,9
+            CALL BDOS
+
+            CALL WAIT_NEXT_SEC      ; align to a new second
+            CALL RTC_SNAP_START     ; remember start HH:MM:SS
+            XRA  A
+            STA  WR_LO
+            STA  WR_HI              ; chunks written = 0
+
+W_LOOP:
+            ; write one 4 KB chunk (32 records)
+            LXI  H,BUF
+            MVI  A,CHUNK_RECS
+            STA  REC_CT
+W_INNER:    ; DMA = HL
+            MOV  D,H
+            MOV  E,L
+            MVI  C,26              ; Set DMA
+            CALL BDOS
+            ; Write sequential
+            LXI  D,FCB
+            MVI  C,21              ; Write Seq
+            CALL BDOS
+            ; HL += 128
+            MOV  A,L
+            ADI 080H
+            MOV  L,A
+            JNC  W_NOCR
+            INR  H
+W_NOCR:
+            LDA  REC_CT
+            DCR  A
+            STA  REC_CT
+            JNZ  W_INNER
+
+            ; dot + chunk++
+            MVI  E,'.'
+            CALL PCHAR
+            CALL INC_WR_CHK
+
+            ; stop when elapsed >= 1s
+            CALL RTC_DELTA_SEC_HL   ; HL = elapsed seconds
+            MOV  A,H
+            ORA  L
+            JNZ  W_DONE
+
+            ; safety cap: if chunks >= MAX_CHUNKS → stop
+            LHLD WR_LO             ; HL = chunks
+            LXI  D,MAX_CHUNKS
+            MOV  A,H
+            CMP  D
+            JC   W_CONT
+            JZ   W_EQH
+            JMP  W_DONE
+W_EQH:      MOV  A,L
+            CMP  E
+            JC   W_CONT
+            JMP  W_DONE
+
+W_CONT:     JMP  W_LOOP
+
+W_DONE:
+            ; Close file after writing
+            LXI  D,FCB
+            MVI  C,16              ; Close
+            CALL BDOS
+
+            ; Report write results
+            CALL CRLF
+            LXI  D,MSG_WT
+            MVI  C,9
+            CALL BDOS
+            CALL RTC_DELTA_SEC_HL
+            SHLD SEC_WR
+            CALL PRINT_U16_HL
+            CALL SP_PAD
+            LXI  D,MSG_S
+            MVI  C,9
+            CALL BDOS
+
+            ; KB/s = (chunks * 4) / seconds
+            LHLD SEC_WR
+            MOV  A,H
+            ORA  L
+            JNZ  W_HASSEC
+            INX  H                      ; avoid div/0
+W_HASSEC:   MOV  D,H
+            MOV  E,L                    ; DE = seconds
+            LHLD WR_LO                  ; HL = chunks
+            DAD  H                      ; HL *= 2
+            DAD  H                      ; HL *= 4  (KB processed)
+            CALL U16_DIV                ; HL = KB/s
+            CALL SP_PAD
+            LXI  D,MSG_KBPS
+            MVI  C,9
+            CALL BDOS
+            CALL CRLF
+
+; -------------------------
+; READ PHASE
+; -------------------------
+            LXI  D,MSG_RD
+            MVI  C,9
+            CALL BDOS
+
+            ; Re-open file for reading
+            LXI  D,FCB
+            MVI  C,15                  ; Open
+            CALL BDOS
+
+            XRA  A
+            STA  RD_LO
+            STA  RD_HI
+
+            CALL WAIT_NEXT_SEC
+            CALL RTC_SNAP_START
+
+R_LOOP:
+            LXI  H,BUF
+            MVI  A,CHUNK_RECS
+            STA  REC_CT
+
+R_INNER:
+            MOV  D,H
+            MOV  E,L
+            MVI  C,26
+            CALL BDOS
+            ; Read sequential
+            LXI  D,FCB
+            MVI  C,20                  ; Read Seq
+            CALL BDOS
+            CPI  01H
+            JNZ  R_OK
+            ; EOF: close & reopen, continue
+            LXI  D,FCB
+            MVI  C,16                  ; Close
+            CALL BDOS
+            LXI  D,FCB
+            MVI  C,15                  ; Open
+            CALL BDOS
+            JMP  R_INNER_CONT
+R_OK:
+            ; advance DMA
+            MOV  A,L
+            ADI 080H
+            MOV  L,A
+            JNC  R_NOCR
+            INR  H
+R_NOCR:
+R_INNER_CONT:
+            LDA  REC_CT
+            DCR  A
+            STA  REC_CT
+            JNZ  R_INNER
+
+            ; dot + chunk++
+            MVI  E,'.'
+            CALL PCHAR
+            CALL INC_RD_CHK
+
+            ; stop when elapsed >= 1s
+            CALL RTC_DELTA_SEC_HL
+            MOV  A,H
+            ORA  L
+            JNZ  R_DONE
+
+            ; optional cap like write
+            LHLD RD_LO
+            LXI  D,MAX_CHUNKS
+            MOV  A,H
+            CMP  D
+            JC   R_LOOP
+            JZ   R_EQH
+            JMP  R_DONE
+R_EQH:      MOV  A,L
+            CMP  E
+            JC   R_LOOP
+            JMP  R_DONE
+
+R_DONE:
+            ; close file after reading
+            LXI  D,FCB
+            MVI  C,16
+            CALL BDOS
+
+            ; Report read results
+            CALL CRLF
+            LXI  D,MSG_RT
+            MVI  C,9
+            CALL BDOS
+            CALL RTC_DELTA_SEC_HL
+            SHLD SEC_RD
+            CALL PRINT_U16_HL
+            CALL SP_PAD
+            LXI  D,MSG_S
+            MVI  C,9
+            CALL BDOS
+
+            LHLD SEC_RD
+            MOV  A,H
+            ORA  L
+            JNZ  R_HASSEC
+            INX  H
+R_HASSEC:   MOV  D,H
+            MOV  E,L                    ; DE = seconds
+            LHLD RD_LO                  ; HL = chunks
+            DAD  H                      ; *2
+            DAD  H                      ; *4
+            CALL U16_DIV
+            CALL SP_PAD
+            LXI  D,MSG_KBPS
+            MVI  C,9
+            CALL BDOS
+            CALL CRLF
+
+            ; ----- CLEANUP -----
+            LXI  D,MSG_CLEAN
+            MVI  C,9
+            CALL BDOS
+            LXI  D,FCB
+            MVI  C,19                  ; Delete file
+            CALL BDOS
+            LXI  D,MSG_DONE
+            MVI  C,9
+            CALL BDOS
+            RET
+
+; =====================================================================
+; RTC helpers
+; =====================================================================
+
+; RTC_READ: Fill TIMBUF via HBIOS (A=0 on success)
+RTC_READ:
+            LXI  H,TIMBUF
+            MVI  B,020H
+            RST  1
+            RET
+
+; RTC_SNAP_START: store start HH/MM/SS (binary) as S_HH,S_MM,S_SS
+RTC_SNAP_START:
+            CALL RTC_READ
+            ORA  A
+            RNZ
+            LDA  TIMBUF+3
+            CALL BCD2BIN
+            STA  S_HH
+            LDA  TIMBUF+4
+            CALL BCD2BIN
+            STA  S_MM
+            LDA  TIMBUF+5
+            CALL BCD2BIN
+            STA  S_SS
+            RET
+
+; WAIT_NEXT_SEC: block until RTC seconds changes
+WAIT_NEXT_SEC:
+            CALL RTC_READ
+            ORA  A
+            RNZ
+            LDA  TIMBUF+5
+            CALL BCD2BIN
+            STA  TMP0
+WN_LOOP:    CALL RTC_READ
+            ORA  A
+            RNZ
+            LDA  TIMBUF+5
+            CALL BCD2BIN
+            MOV  B,A
+            LDA  TMP0
+            CMP  B
+            JZ   WN_LOOP
+            RET
+
+; RTC_DELTA_SEC_HL
+; HL = elapsed seconds since RTC_SNAP_START (0..65535),
+; handles wrap across minute/hour (and midnight).
+RTC_DELTA_SEC_HL:
+            CALL RTC_READ
+            ORA  A
+            RNZ
+            ; current HH/MM/SS -> C_HH,C_MM,C_SS (binary)
+            LDA  TIMBUF+3
+            CALL BCD2BIN
+            STA  C_HH
+            LDA  TIMBUF+4
+            CALL BCD2BIN
+            STA  C_MM
+            LDA  TIMBUF+5
+            CALL BCD2BIN
+            STA  C_SS
+
+            ; ---- seconds with borrow into minutes ----
+            LDA  C_SS           ; curS
+            MOV  B,A
+            LDA  S_SS           ; startS
+            MOV  C,A
+            MOV  A,B
+            CMP  C
+            JNC  DSEC_NO_BORR
+            ADI  60
+            SUB  C
+            STA  D_SEC
+            MVI  A,1
+            STA  BORR1
+            JMP  DSEC_DONE
+DSEC_NO_BORR:
+            SUB  C
+            STA  D_SEC
+            XRA  A
+            STA  BORR1
+DSEC_DONE:
+
+            ; ---- minutes (apply seconds-borrow first) ----
+            LDA  C_MM           ; curM
+            MOV  B,A
+            LDA  BORR1
+            ORA  A
+            JZ   MIN_NO_ADJ
+            MOV  A,B
+            ORA  A
+            JNZ  MIN_DEC1
+            MVI  B,59
+            MVI  A,1
+            STA  BORR2
+            JMP  MIN_ADJ_OK
+MIN_DEC1:   DCR  B
+            XRA  A
+            STA  BORR2
+MIN_ADJ_OK:
+MIN_NO_ADJ:
+            LDA  S_MM
+            MOV  C,A            ; startM
+            MOV  A,B            ; curM adjusted
+            CMP  C
+            JNC  DMIN_NO_BORR
+            ADI  60
+            SUB  C
+            STA  D_MIN
+            MVI  A,1
+            STA  BORR2
+            JMP  DMIN_DONE
+DMIN_NO_BORR:
+            SUB  C
+            STA  D_MIN
+DMIN_DONE:
+
+            ; ---- hours (apply minute-borrow) ----
+            LDA  C_HH           ; curH
+            MOV  B,A
+            LDA  BORR2
+            ORA  A
+            JZ   HOUR_NO_ADJ
+            MOV  A,B
+            ORA  A
+            JNZ  HOUR_DEC1
+            MVI  B,23
+            JMP  HOUR_ADJ_OK
+HOUR_DEC1:  DCR  B
+HOUR_ADJ_OK:
+HOUR_NO_ADJ:
+            LDA  S_HH
+            MOV  C,A            ; startH
+            MOV  A,B            ; curH adjusted
+            CMP  C
+            JNC  DHOUR_NO_BORR
+            ADI  24
+            SUB  C
+            STA  D_HR
+            JMP  DHOUR_DONE
+DHOUR_NO_BORR:
+            SUB  C
+            STA  D_HR
+DHOUR_DONE:
+
+            ; ---- total seconds = H*3600 + M*60 + S ----
+            XRA  A
+            MOV  H,A
+            MOV  L,A
+
+            ; add hours * 3600 (0x0E10)
+            LDA  D_HR
+            MOV  B,A
+            MVI  D,0EH
+            MVI  E,10H
+ADD_H3600:  MOV  A,B
+            ORA  A
+            JZ   AH_DONE
+            DAD  D
+            DCR  B
+            JMP  ADD_H3600
+AH_DONE:
+            ; add minutes * 60 (0x003C)
+            LDA  D_MIN
+            MOV  B,A
+            MVI  D,00H
+            MVI  E,3CH
+ADD_M60:    MOV  A,B
+            ORA  A
+            JZ   AM_DONE
+            DAD  D
+            DCR  B
+            JMP  ADD_M60
+AM_DONE:
+            ; add seconds (0..59)
+            XRA  A
+            MOV  D,A
+            LDA  D_SEC
+            MOV  E,A
+            DAD  D
+            RET
+
+; =====================================================================
+; Math/utility helpers
+; =====================================================================
+
+; BCD2BIN: A (BCD 00..99) -> A (binary)
+BCD2BIN:
+            MOV  D,A
+            ANI  0FH
+            MOV  E,A            ; ones
+            MOV  A,D
+            ANI  0F0H
+            RRC
+            RRC
+            RRC
+            RRC                 ; tens
+            MOV  B,A            ; B=tens
+            ; 10*tens = (t<<1) + (t<<3)
+            MOV  A,B
+            ADD  A              ; 2t
+            MOV  C,A
+            MOV  A,B
+            ADD  A              ; 2t
+            ADD  A              ; 4t
+            ADD  A              ; 8t
+            ADD  C              ; 10t
+            ADD  E              ; + ones
+            RET
+
+; U16_DIV — HL / DE (unsigned), quotient -> HL
+U16_DIV:
+            XRA  A
+            MOV  B,A
+            MOV  C,A            ; BC=0
+UD_LP:      MOV  A,H
+            CMP  D
+            JC   UD_DONE
+            JZ   UD_EQ
+            JMP  UD_SUB
+UD_EQ:      MOV  A,L
+            CMP  E
+            JC   UD_DONE
+UD_SUB:     MOV  A,L
+            SUB  E
+            MOV  L,A
+            MOV  A,H
+            SBB  D
+            MOV  H,A
+            INR  C
+            JNZ  UD_LP
+            INR  B
+            JMP  UD_LP
+UD_DONE:    MOV  H,B
+            MOV  L,C
+            RET
+
+; PRINT_U16_HL — print unsigned HL in decimal (no leading zeros)
+PRINT_U16_HL:
+            MVI  A,0
+            STA  LZFLAG
+
+            LXI  D,2710H        ; 10000
+            CALL DIGIT_OUT
+            LXI  D,03E8H        ; 1000
+            CALL DIGIT_OUT
+            LXI  D,0064H        ; 100
+            CALL DIGIT_OUT
+            LXI  D,000AH        ; 10
+            CALL DIGIT_OUT
+            LXI  D,0001H        ; 1
+            CALL DIGIT_OUT
+            RET
+
+; DIGIT_OUT: DE=place, HL=value → prints one digit, leaves HL=remainder
+DIGIT_OUT:
+            PUSH B
+            PUSH D
+            XRA  A
+            MOV  C,A            ; C = digit
+DO_LOOP:
+            ; if HL < DE then end
+            MOV  A,H
+            CMP  D
+            JC   DO_END
+            JZ   DO_EQ
+            JMP  DO_SUB
+DO_EQ:      MOV  A,L
+            CMP  E
+            JC   DO_END
+DO_SUB:     ; HL -= DE
+            MOV  A,L
+            SUB  E
+            MOV  L,A
+            MOV  A,H
+            SBB  D
+            MOV  H,A
+            INR  C
+            JMP  DO_LOOP
+DO_END:
+            ; print digit if not leading, else skip unless last place
+            LDA  LZFLAG
+            ORA  C
+            JNZ  DO_PRINT
+            ; if DE==0001 (last place), must print '0'
+            MOV  A,D
+            ORA  E
+            CPI  01H
+            JNZ  DO_SKIP
+DO_PRINT:   MVI  A,1
+            STA  LZFLAG
+            MOV  A,C
+            ADI  '0'
+            MOV  E,A
+            CALL PCHAR
+DO_SKIP:
+            POP  D
+            POP  B
+            RET
+
+; BDOS helpers
+PCHAR:      MVI  C,CONOUT
+            CALL BDOS
+            RET
+
+CRLF:       MVI  E,13
+            CALL PCHAR
+            MVI  E,10
+            CALL PCHAR
+            RET
+
+SP_PAD:     MVI  E,' '
+            CALL PCHAR
+            RET
+
+; counters
+INC_WR_CHK:
+            LHLD WR_LO
+            INX  H
+            SHLD WR_LO
+            RET
+
+INC_RD_CHK:
+            LHLD RD_LO
+            INX  H
+            SHLD RD_LO
+            RET
+
+; =====================================================================
+; Data
+; =====================================================================
+
+REC_CT:     DB   00H
+WR_LO:      DW   0000H
+WR_HI:      DW   0000H
+RD_LO:      DW   0000H
+RD_HI:      DW   0000H
+LZFLAG:     DB   00H
+
+; RTC scratch
+TIMBUF:     DS   6              ; YY MM DD HH MM SS (BCD)
+S_HH:       DB   00H
+S_MM:       DB   00H
+S_SS:       DB   00H
+C_HH:       DB   00H
+C_MM:       DB   00H
+C_SS:       DB   00H
+D_HR:       DB   00H
+D_MIN:      DB   00H
+D_SEC:      DB   00H
+BORR1:      DB   00H
+BORR2:      DB   00H
+TMP0:       DB   00H
+
+SEC_WR:     DW   0000H
+SEC_RD:     DW   0000H
+
+; FCB for DSKBENCH.DAT
+FCB:        DB   0              ; current drive
+            DB   'D','S','K','B','E','N','C','H'
+            DB   'D','A','T'
+            DS   20
+
+; messages
+MSG_HDR:    DB  1BH,'[','2','J',1BH,'[','H','$'
+            DB  'Disk Speed Benchmark (RTC)',13,10,'$'
+MSG_RTCERR: DB  'RTC not available (HBIOS RTCGETTIM failed).',13,10
+            DB  'This test requires the SC727 RTC.',13,10,'$'
+
+MSG_MAKE:   DB  'Creating DSKBENCH.DAT ...',13,10,'$'
+MSG_WR:     DB  'Write test (auto >= 1s):',13,10,'$'
+MSG_WT:     DB  13,10,'Write time: ','$'
+MSG_RD:     DB  'Read test  (auto >= 1s):',13,10,'$'
+MSG_RT:     DB  13,10,'Read time:  ','$'
+MSG_S:      DB  ' s  ','$'
+MSG_KBPS:   DB  'KB/s',13,10,'$'
+MSG_CLEAN:  DB  'Cleaning up ...',13,10,'$'
+MSG_DONE:   DB  'Done.',13,10,'$'
+
+; 4 KB buffer
+BUF:        DS   4096
+
+            END  START
+
+*****************************************************************************************************
+
+:1001000011FC040E09CD0500CDDA02B7CA180111A1
+:1001100021050E09CD0500C911DC040E13CD050023
+:100120001172050E09CD050011DC040E16CD050077
+:100130003EA521080601001077230B78B1C23801D3
+:10014000118E050E09CD0500CD0203CDE102AF32BF
+:10015000BD0432BF042108063E2032BC04545D0EAB
+:100160001ACD050011DC040E15CD05007DC6806F8B
+:10017000D27401243ABC043D32BC04C25D011E2E7F
+:10018000CD9504CDAC04CD24037CB5C2AA012ABD13
+:10019000041100087CBADAA701CA9F01C3AA017D35
+:1001A000BBDAA701C3AA01C3550111DC040E10CDAF
+:1001B0000500CD9B0411A9050E09CD0500CD240332
+:1001C00022D804CD3604CDA60411E2050E09CD05D2
+:1001D000002AD8047CB5C2DA0123545D2ABD042963
+:1001E00029CD1204CDA60411E7050E09CD0500CDD9
+:1001F0009B0411B8050E09CD050011DC040E0FCDCE
+:100200000500AF32C10432C304CD0203CDE10221A7
+:1002100008063E2032BC04545D0E1ACD050011DCE8
+:10022000040E14CD0500FE01C23E0211DC040E10C6
+:10023000CD050011DC040E0FCD0500C346027DC6BE
+:10024000806FD24602243ABC043D32BC04C217027D
+:100250001E2ECD9504CDB404CD24037CB5C2790205
+:100260002AC1041100087CBADA0F02CA7102C379EC
+:10027000027DBBDA0F02C3790211DC040E10CD053A
+:1002800000CD9B0411D3050E09CD0500CD2403221A
+:10029000DA04CD3604CDA60411E2050E09CD050021
+:1002A0002ADA047CB5C2A90223545D2AC104292993
+:1002B000CD1204CDA60411E7050E09CD0500CD9B96
+:1002C0000411EE050E09CD050011DC040E13CD0559
+:1002D000001100060E09CD0500C921C6040620CF75
+:1002E000C9CDDA02B7C03AC904CDFC0332CC043A16
+:1002F000CA04CDFC0332CD043ACB04CDFC0332CE8C
+:1003000004C9CDDA02B7C03ACB04CDFC0332D7041E
+:10031000CDDA02B7C03ACB04CDFC03473AD704B8D4
+:10032000CA1003C9CDDA02B7C03AC904CDFC033202
+:10033000CF043ACA04CDFC0332D0043ACB04CDFC3E
+:100340000332D1043AD104473ACE044F78B9D25F90
+:1003500003C63C9132D4043E0132D504C3670391F5
+:1003600032D404AF32D5043AD004473AD504B7CAE0
+:10037000860378B7C28103063B3E0132D604C386AA
+:100380000305AF32D6043ACD044F78B9D29D03C6E7
+:100390003C9132D3043E0132D604C3A1039132D33F
+:1003A000043ACF04473AD604B7CAB70378B7C2B6FF
+:1003B000030617C3B703053ACC044F78B9D2C90373
+:1003C000C6189132D204C3CD039132D204AF676F05
+:1003D0003AD20447160E1E1078B7CAE2031905C3B5
+:1003E000D8033AD3044716001E3C78B7CAF4031961
+:1003F00005C3EA03AF573AD4045F19C957E60F5F44
+:100400007AE6F00F0F0F0F4778874F78878787813D
+:1004100083C9AF474F7CBADA3304CA2004C325042A
+:100420007DBBDA33047D936F7C9A670CC21504049C
+:10043000C315046069C93E0032C504111027CD5AA6
+:100440000411E803CD5A04116400CD5A04110A00C6
+:10045000CD5A04110100CD5A04C9C5D5AF4F7CBA9D
+:10046000DA7804CA6904C36E047DBBDA78047D932C
+:100470006F7C9A670CC35E043AC504B1C286047AE5
+:10048000B3FE01C292043E0132C50479C6305FCD8D
+:100490009504D1C1C90E02CD0500C91E0DCD95042C
+:1004A0001E0ACD9504C91E20CD9504C92ABD04237A
+:1004B00022BD04C92AC1042322C104C900000000CE
+:0604C00000000000000036
+:1004CC000000000000000000000000000000000020
+:0C04DC000044534B42454E4348444154F9
+:1004FC001B5B324A1B5B48244469736B2053706549
+:10050C0065642042656E63686D61726B202852547D
+:10051C0043290D0A24525443206E6F742061766176
+:10052C00696C61626C6520284842494F53205254D3
+:10053C004347455454494D206661696C6564292EC6
+:10054C000D0A546869732074657374207265717533
+:10055C0069726573207468652053433732372052B3
+:10056C0054432E0D0A244372656174696E672044EE
+:10057C00534B42454E43482E444154202E2E2E0DB3
+:10058C000A24577269746520746573742028617528
+:10059C00746F203E3D203173293A0D0A240D0A5701
+:1005AC00726974652074696D653A202452656164C2
+:1005BC0020746573742020286175746F203E3D2073
+:1005CC003173293A0D0A240D0A526561642074694D
+:1005DC006D653A20202420732020244B422F730D6C
+:1005EC000A24436C65616E696E67207570202E2E2F
+:0C05FC002E0D0A24446F6E652E0D0A249B
+:00000001FF
