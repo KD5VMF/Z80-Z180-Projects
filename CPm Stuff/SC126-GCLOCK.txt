@@ -3,7 +3,7 @@
 ; Bright-green big "HH:MM:SS" + SC126 seconds-only LED mirror @ 0Dh
 ; --------------------------------------------------------------
 ; Features:
-;   * Reads RTC (SC727 via HBIOS, no direct RTC port I/O)
+;   * Reads on board RTC (via HBIOS, no direct RTC port I/O)
 ;   * Renders big "HH:MM:SS" in BRIGHT GREEN at top-left (ANSI)
 ;   * Updates once per second (waits for the second to change)
 ;   * Mirrors seconds (0..59, binary) to SC126 LED latch @ 0Dh
@@ -426,4 +426,5 @@ FONT:
 :100330007080F088888870F80810204040407088ED
 :10034000887088887070888878080870002020007D
 :0A0350002020000000000000000063
+
 :00000001FF
