@@ -1,0 +1,509 @@
+; ==============================================================
+; BIGCLOCKG.ASM — 8080 mnemonics, CP/M + RomWBW HBIOS + SC719
+; BRIGHT GREEN big clock with per-field LED mirrors
+; --------------------------------------------------------------
+; Features:
+;   * Reads RTC (SC727 via HBIOS, no direct RTC port I/O)
+;   * Renders big "HH:MM:SS" in BRIGHT GREEN at top-left (ANSI)
+;   * Updates once per second (waits for the second to change)
+;   * Mirrors HH,MM,SS (binary) to SC719 LED latches:
+;       - Seconds  -> port 30h
+;       - Minutes  -> port 31h
+;       - Hours    -> port 32h
+;   * Q or q quits; LEDs cleared; color reset; cursor restored
+;
+; Notes:
+;   - Using HBIOS means your RTC’s physical I/O address (e.g., 0Ch)
+;     is irrelevant here. If you later want direct I/O reads, we can
+;     swap in a direct READRTC routine, still 8080-strict.
+; ==============================================================
+
+BDOS        EQU 0005H          ; CP/M BDOS entry
+CONOUT      EQU 2              ; BDOS fn 2: console OUT (char in E)
+
+; ====== SC719 LED PORTS & POLARITY (adjust as needed) =========
+DIO_SEC     EQU 030H           ; seconds LED latch port
+DIO_MIN     EQU 031H           ; minutes LED latch port
+DIO_HR      EQU 032H           ; hours   LED latch port
+
+INV_SEC     EQU 00H            ; XOR mask for seconds (00h=active-high, FFh=active-low)
+INV_MIN     EQU 00H            ; XOR mask for minutes
+INV_HR      EQU 00H            ; XOR mask for hours
+
+            ORG 0100H          ; CP/M .COM entry point
+
+; --------------------------------------------------------------
+; Program entry & initial UI setup
+; --------------------------------------------------------------
+START:
+            ; Clear screen, home cursor, hide cursor
+            LXI  D,ESC2J       ; ESC[2J$
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HOME        ; ESC[H$
+            MVI  C,9
+            CALL BDOS
+            LXI  D,HIDECUR     ; ESC[?25l$
+            MVI  C,9
+            CALL BDOS
+
+            ; Set BRIGHT GREEN foreground for our big digits
+            LXI  D,GREEN       ; ESC[1;32m$
+            MVI  C,9
+            CALL BDOS
+
+            ; LED self-test on all three ports
+            MVI  A,055H
+            CALL LED_TEST_ALL
+            CALL SHORTDLY
+            MVI  A,0AAH
+            CALL LED_TEST_ALL
+            CALL SHORTDLY
+            MVI  A,0FFH
+            CALL LED_TEST_ALL
+            CALL SHORTDLY
+            XRA  A
+            CALL LED_TEST_ALL
+            CALL SHORTDLY
+
+; --------------------------------------------------------------
+; Main loop: draw big time, update LEDs, wait for next tick
+; --------------------------------------------------------------
+MAIN:
+            ; Always draw from the top-left
+            LXI  D,HOME
+            MVI  C,9
+            CALL BDOS
+
+            CALL READRTC       ; TIMBUF = YY,MM,DD,HH,MM,SS (BCD)
+            LDA  TIMBUF+5
+            STA  SEC_PREV      ; remember seconds (BCD) for tick wait
+
+            CALL MAKEBIGSTR    ; BIGSTR[0..7] = "HH:MM:SS" (ASCII)
+            CALL PRINTBIGTIME  ; render 5×7 digits in current color
+            CALL WRITELEDS     ; mirror HH/MM/SS to 32h/31h/30h
+
+; Wait until the second changes, or 'Q' to quit
+WAITNEXT:   CALL KEYCHECK
+            ORA  A
+            JZ   WN1
+            ANI  05FH          ; normalize to uppercase
+            CPI  'Q'
+            JZ   QUIT
+WN1:        CALL SHORTDLY
+            CALL READRTC
+            LDA  TIMBUF+5      ; A = current seconds (BCD)
+            MOV  D,A
+            LDA  SEC_PREV
+            CMP  D
+            JZ   WAITNEXT
+            MOV  A,D
+            STA  SEC_PREV
+            JMP  MAIN
+
+; --------------------------------------------------------------
+; Quit: LEDs off (all three), reset color, show cursor, CR/LF, RET
+; --------------------------------------------------------------
+QUIT:
+            XRA  A
+            XRI  INV_SEC
+            OUT  DIO_SEC
+            XRA  A
+            XRI  INV_MIN
+            OUT  DIO_MIN
+            XRA  A
+            XRI  INV_HR
+            OUT  DIO_HR
+
+            LXI  D,RESET       ; ESC[0m$
+            MVI  C,9
+            CALL BDOS
+            LXI  D,SHOWCUR     ; ESC[?25h$
+            MVI  C,9
+            CALL BDOS
+            MVI  E,13          ; CR
+            CALL PCHAR
+            MVI  E,10          ; LF
+            CALL PCHAR
+            RET
+
+; ==============================================================
+; HBIOS RTC access (RomWBW)
+;   RTCGETTIM: B=20h, HL=buffer, RST 1 (vector 0008h)
+;   Returns YY,MM,DD,HH,MM,SS (all BCD) to [HL..HL+5]
+; ==============================================================
+READRTC:    LXI  H,TIMBUF
+            MVI  B,020H
+            RST  1
+            RET
+
+; ==============================================================
+; MAKEBIGSTR — build ASCII "HH:MM:SS" into BIGSTR[0..7]
+; ==============================================================
+MAKEBIGSTR:
+            ; Hours
+            LDA  TIMBUF+3
+            CALL BCD2ASC
+            MOV  A,H
+            STA  BIGSTR+0
+            MOV  A,L
+            STA  BIGSTR+1
+            MVI  A,':'
+            STA  BIGSTR+2
+            ; Minutes
+            LDA  TIMBUF+4
+            CALL BCD2ASC
+            MOV  A,H
+            STA  BIGSTR+3
+            MOV  A,L
+            STA  BIGSTR+4
+            MVI  A,':'
+            STA  BIGSTR+5
+            ; Seconds
+            LDA  TIMBUF+5
+            CALL BCD2ASC
+            MOV  A,H
+            STA  BIGSTR+6
+            MOV  A,L
+            STA  BIGSTR+7
+            RET
+
+; ==============================================================
+; PRINTBIGTIME — render BIGSTR[0..7] using 5×7 FONT
+;  For each of 7 rows, for each of 8 glyphs:
+;    fetch glyph row byte (bits 7..3) and print '#' or ' '
+; ==============================================================
+PRINTBIGTIME:
+            MVI  A,00H
+            STA  ROWI
+PR_ROW:
+            MVI  A,00H
+            STA  COLI
+PR_COL:
+            ; HL = BIGSTR + COLI
+            LXI  H,BIGSTR
+            LDA  COLI
+            MOV  E,A
+            MVI  D,00H
+            DAD  D
+            MOV  A,M           ; A = ASCII char for this position
+
+            ; Convert ASCII to glyph index (B)
+            CALL CHARTOGLYPH   ; B = 0..9, 10=':', 11=blank
+
+            ; Get pattern byte for current row (A=bits7..3)
+            LDA  ROWI
+            MOV  E,A           ; E=row 0..6
+            CALL GETROWPAT     ; A=pattern
+            MOV  D,A           ; keep in D (we'll shift left)
+
+            ; Print 5 pixels for this glyph row
+            MVI  A,05H
+            STA  COUNT5
+PR_PIX:
+            LDA  COUNT5
+            ORA  A
+            JZ   PR_AFTER_PIX
+
+            MOV  A,D
+            ANI  080H          ; test leftmost bit
+            JZ   PR_SPACE
+            MVI  E,'#'         ; (use 0DBh if you prefer solid block on your terminal)
+            CALL PCHAR
+            JMP  PR_SHIFT
+PR_SPACE:   MVI  E,' '
+            CALL PCHAR
+
+PR_SHIFT:   ; D <<= 1  (8080 way: A=D, ADD A, D=A)
+            MOV  A,D
+            ADD  A
+            MOV  D,A
+
+            LDA  COUNT5
+            DCR  A
+            STA  COUNT5
+            JMP  PR_PIX
+
+PR_AFTER_PIX:
+            ; inter-character space (thin gap)
+            MVI  E,' '
+            CALL PCHAR
+
+            ; next glyph
+            LDA  COLI
+            INR  A
+            STA  COLI
+            CPI  08H           ; 8 glyphs total (HH:MM:SS)
+            JNZ  PR_COL
+
+            ; end of row → CR/LF
+            MVI  E,13
+            CALL PCHAR
+            MVI  E,10
+            CALL PCHAR
+
+            ; next row
+            LDA  ROWI
+            INR  A
+            STA  ROWI
+            CPI  07H           ; 7 rows total
+            JNZ  PR_ROW
+            RET
+
+; ==============================================================
+; CHARTOGLYPH — ASCII → glyph index (0..9, 10=':', 11=blank)
+; ==============================================================
+CHARTOGLYPH:
+            CPI  ':'           ; 3Ah?
+            JNZ  CG_DIG
+            MVI  B,0AH
+            RET
+CG_DIG:     CPI  '0'
+            JC   CG_BLK
+            SUI  '0'
+            CPI  0AH
+            JNC  CG_BLK
+            MOV  B,A
+            RET
+CG_BLK:     MVI  B,0BH         ; blank
+            RET
+
+; ==============================================================
+; GETROWPAT — A=pattern byte for glyph B at row E
+;   B=glyph (0..11), E=row (0..6)
+;   Each glyph has 7 bytes; bits 7..3 are the 5 pixels.
+; ==============================================================
+ROWTMP:     DB 00H
+GETROWPAT:
+            MOV  A,E
+            STA  ROWTMP        ; save row (E will be reused)
+            LXI  H,FONT        ; HL = base of font table
+            LXI  D,0007H       ; step = 7 bytes per glyph
+            MOV  C,B
+GRP_LP:     MOV  A,C
+            ORA  A
+            JZ   GRP_DONE
+            DAD  D             ; HL += 7
+            DCR  C
+            JMP  GRP_LP
+GRP_DONE:   ; add row offset
+            MVI  D,00H
+            LDA  ROWTMP
+            MOV  E,A
+            DAD  D             ; HL += row
+            MOV  A,M           ; row pattern
+            RET
+
+; ==============================================================
+; WRITELEDS — mirror SS,MM,HH (binary) to 30h/31h/32h
+; ==============================================================
+WRITELEDS:
+            ; Seconds (0..59)
+            LDA  TIMBUF+5
+            CALL BCD2BIN
+            XRI  INV_SEC
+            OUT  DIO_SEC
+
+            ; Minutes (0..59)
+            LDA  TIMBUF+4
+            CALL BCD2BIN
+            XRI  INV_MIN
+            OUT  DIO_MIN
+
+            ; Hours (0..23)
+            LDA  TIMBUF+3
+            CALL BCD2BIN
+            XRI  INV_HR
+            OUT  DIO_HR
+            RET
+
+; ==============================================================
+; LED_TEST_ALL — write same test pattern in A to all three ports
+; ==============================================================
+LED_TEST_ALL:
+            PUSH PSW
+            MOV  A,M           ; (not used; ensure A from caller)
+            POP  PSW           ; restore original A (test byte)
+            PUSH PSW
+            MOV  B,A
+
+            ; seconds
+            MOV  A,B
+            XRI  INV_SEC
+            OUT  DIO_SEC
+
+            ; minutes
+            MOV  A,B
+            XRI  INV_MIN
+            OUT  DIO_MIN
+
+            ; hours
+            MOV  A,B
+            XRI  INV_HR
+            OUT  DIO_HR
+
+            POP  PSW
+            RET
+
+; ==============================================================
+; KEYCHECK — non-blocking console read (BDOS 6, E=FFh)
+;   Returns A=0 if no key; else A=ASCII
+; ==============================================================
+KEYCHECK:
+            PUSH B
+            PUSH D
+            MVI  C,6
+            MVI  E,0FFH
+            CALL BDOS
+            MOV  L,A
+            POP  D
+            POP  B
+            MOV  A,L
+            RET
+
+; ==============================================================
+; Helpers: BCD→BIN (A in, A out), BCD→ASCII (H=tens, L=ones),
+;          console char, short delay
+; ==============================================================
+; A = BCD (tens in high nibble), returns A = binary
+BCD2BIN:    MOV  D,A
+            ANI  00FH          ; ones
+            MOV  E,A
+            MOV  A,D
+            ANI  0F0H          ; tens nibble
+            RRC
+            RRC
+            RRC
+            RRC                ; A = tens (0..9)
+            MOV  B,A
+            ; tens*10 = (t<<3)+(t<<1)
+            MOV  A,B           ; t
+            ADD  A             ; 2t
+            MOV  C,A           ; keep 2t
+            MOV  A,B           ; t
+            ADD  A             ; 2t
+            ADD  A             ; 4t
+            ADD  A             ; 8t
+            ADD  C             ; 10t
+            ADD  E             ; + ones
+            RET
+
+; H,L = ASCII digits for input BCD in A
+BCD2ASC:    MOV  D,A
+            ANI  00FH          ; ones
+            ADI  '0'
+            MOV  L,A
+            MOV  A,D
+            ANI  0F0H          ; tens
+            RRC
+            RRC
+            RRC
+            RRC
+            ADI  '0'
+            MOV  H,A
+            RET
+
+PCHAR:      MVI  C,CONOUT
+            CALL BDOS
+            RET
+
+SHORTDLY:   LXI  H,2000H
+SDLY1:      DCX  H
+            MOV  A,H
+            ORA  L
+            JNZ  SDLY1
+            RET
+
+; ==============================================================
+; Data: RTC buffer, work bytes, ANSI strings, FONT table
+; ==============================================================
+TIMBUF:     DS   6             ; YY,MM,DD,HH,MM,SS (BCD)
+BIGSTR:     DS   8             ; "HH:MM:SS"
+ROWI:       DB   00H
+COLI:       DB   00H
+COUNT5:     DB   00H
+SEC_PREV:   DB   00H
+
+; ANSI sequences ($-terminated for BDOS 9)
+ESC2J:      DB  1BH,'[','2','J','$'        ; clear screen
+HOME:       DB  1BH,'[','H','$'            ; cursor home
+HIDECUR:    DB  1BH,'?','2','5','l','$'    ; hide cursor
+SHOWCUR:    DB  1BH,'?','2','5','h','$'    ; show cursor
+GREEN:      DB  1BH,'[','1',';','3','2','m','$' ; bright green
+RESET:      DB  1BH,'[','0','m','$'        ; reset colors
+
+; 5×7 FONT (12 glyphs × 7 rows) — bits 7..3 are 5 pixels (left→right)
+; Index: 0..9 digits '0'..'9', 10=':', 11=blank
+FONT:
+; '0'
+            DB 070H,088H,088H,088H,088H,088H,070H
+; '1'
+            DB 020H,060H,020H,020H,020H,020H,070H
+; '2'
+            DB 070H,088H,008H,030H,040H,080H,0F8H
+; '3'
+            DB 070H,088H,008H,030H,008H,088H,070H
+; '4'
+            DB 010H,030H,050H,090H,0F8H,010H,010H
+; '5'
+            DB 0F8H,080H,0F0H,008H,008H,088H,070H
+; '6'
+            DB 070H,080H,0F0H,088H,088H,088H,070H
+; '7'
+            DB 0F8H,008H,010H,020H,040H,040H,040H
+; '8'
+            DB 070H,088H,088H,070H,088H,088H,070H
+; '9'
+            DB 070H,088H,088H,078H,008H,008H,070H
+; ':'
+            DB 000H,020H,020H,000H,020H,020H,000H
+; blank
+            DB 000H,000H,000H,000H,000H,000H,000H
+
+            END START
+
+
+****************************************************************************
+
+:10010000111D030E09CD05001122030E09CD0500B6
+:100110001126030E09CD05001132030E09CD05008D
+:100120003E55CDB002CD01033EAACDB002CD0103B4
+:100130003EFFCDB002CD0103AFCDB002CD01031122
+:1001400022030E09CD0500CDA9013A1003321C038C
+:10015000CDB001CDE501CD9102CDC602B7CA670190
+:10016000E65FFE51CA7F01CD0103CDA9013A10031C
+:10017000573A1C03BACA59017A321C03C33F01AF74
+:10018000EE00D330AFEE00D331AFEE00D332113AF0
+:10019000030E09CD0500112C030E09CD05001E0D1F
+:1001A000CDFB021E0ACDFB02C9210B030620CFC9DD
+:1001B0003A0E03CDEA027C3211037D3212033E3A3D
+:1001C0003213033A0F03CDEA027C3214037D321559
+:1001D000033E3A3216033A1003CDEA027C3217038B
+:1001E0007D321803C93E003219033E00321A032142
+:1001F00011033A1A035F1600197ECD59023A19030A
+:100200005FCD7302573E05321B033A1B03B7CA3159
+:10021000027AE680CA1F021E23CDFB02C324021EFF
+:1002200020CDFB027A87573A1B033D321B03C30ADA
+:10023000021E20CDFB023A1A033C321A03FE08C20A
+:10024000EF011E0DCDFB021E0ACDFB023A19033C45
+:10025000321903FE07C2EA01C9FE3AC26102060A68
+:10026000C9FE30DA6F02D630FE0AD26F0247C906E5
+:100270000BC9007B327202213F031107004879B796
+:10028000CA8802190DC37E0216003A72025F197EF7
+:10029000C93A1003CDD402EE00D3303A0F03CDD4C7
+:1002A00002EE00D3313A0E03CDD402EE00D332C9B0
+:1002B000F57EF1F54778EE00D33078EE00D3317853
+:1002C000EE00D332F1C9C5D50E061EFFCD05006F75
+:1002D000D1C17DC957E60F5F7AE6F00F0F0F0F47C8
+:1002E00078874F788787878183C957E60FC6306F35
+:1002F0007AE6F00F0F0F0FC63067C90E02CD05006A
+:0B030000C92100202B7CB5C20403C9FA
+:10031900000000001B5B324A241B5B48241B3F3250
+:10032900356C241B3F323568241B5B313B33326DFE
+:10033900241B5B306D247088888888887020602031
+:1003490020202070708808304080F87088083008B4
+:10035900887010305090F81010F880F008088870F4
+:100369007080F088888870F80810204040407088B4
+:100379008870888870708888780808700020200044
+:0A038900202000000000000000002A
+:00000001FF
