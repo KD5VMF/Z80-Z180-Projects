@@ -6,7 +6,7 @@
 ;   * Reads RTC (SC727 via HBIOS, no direct RTC port I/O)
 ;   * Renders big "HH:MM:SS" in BRIGHT GREEN at top-left (ANSI)
 ;   * Updates once per second (waits for the second to change)
-;   * Mirrors HH,MM,SS (binary) to SC719 LED latches:
+;   * Mirrors HH,MM,SS (binary) to Three SC719 LED latches:
 ;       - Seconds  -> port 30h
 ;       - Minutes  -> port 31h
 ;       - Hours    -> port 32h
@@ -506,4 +506,5 @@ FONT:
 :100369007080F088888870F80810204040407088B4
 :100379008870888870708888780808700020200044
 :0A038900202000000000000000002A
+
 :00000001FF
