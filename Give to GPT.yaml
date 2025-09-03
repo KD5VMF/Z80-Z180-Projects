@@ -1,0 +1,338 @@
+# SC700/SC126 + SC719 8080 Assembly Profile
+# Version: 1.0
+# Last-Updated: 2025-09-02
+# Author: (you)
+# Purpose: Hand this file back to ChatGPT later — it encodes everything needed
+#          to generate *correct 8080 code* for your Small Computer Central rigs
+#          (SC700 series, SC126 Z180) with SC719 Digital I/O and RomWBW HBIOS.
+
+meta:
+  systems:
+    - SC700 series (various, Z80-class; use 8080-compatible mnemonics)
+    - SC126 Z180 (runs 8080/Z80 code; we target 8080-strict for portability)
+  os: CP/M 2.2 (RomWBW distribution)
+  bios: RomWBW HBIOS
+  assembler: ASM.COM (Digital Research) — 8080 mnemonics only
+  basic: MBASIC (Microsoft BASIC-80)
+  com_programs:
+    origin: ORG 0100H
+    return: RET (or warm boot via system reset); no implicit exit function
+  comments: "ASM.COM uses ';' for comments. Hex constants like 0FFH (leading 0 for A–F). Strings in single quotes."
+
+hardware:
+  clocks:
+    SC126_Z180: "typ ~18.432 MHz (exact speed only matters for delays)"
+    SC700_generic: "varies; avoid cycle-count assumptions when possible"
+  memory:
+    TPA: "Transient Program Area from 0100H up to BDOS/CCP; avoid using fixed high addresses."
+  rtc:
+    module: SC727 DS1302 (RomWBW DSRTC)
+    hbios_call: "RTCGETTIM via HBIOS vector RST 1"
+    call:
+      entry: "RST 1"
+      B: 0x20  # function id
+      HL: "buffer (6 bytes)"
+      returns: "YY,MM,DD,HH,MM,SS (BCD) in buffer; A=status (00=OK)"
+  dio:
+    module: SC719 Digital I/O
+    base_io_default:
+      hex: 0x30
+      dec: 48
+      note: "Set by JP1 on SC719. Both ends must match."
+    lines:
+      D0-D7: "8-bit parallel data. We commonly use D7 as strobe in protocols; raw mirroring uses all 8 bits."
+    polarity:
+      default: active-high
+      invert_by:
+        asm: "IN_INV/OUT_INV EQU 0FFH"
+        basic: "IV=255"
+  serial:
+    romwbw_devices: ["UR1:", "UR2:", "TTY:", "AUX:", "PUN:", "RDR:", "LST:"]
+    examples:
+      mode: "MODE COM1: 115200,N,8,1"
+      map_reader_punch: ["STAT RDR:=UR2:", "STAT PUN:=UR2:"]
+
+coding_conventions:
+  target_isa: "8080 strict (no Z80-only ops like EXX, LD (HL),n, etc.)"
+  safe_ops: ["IN/OUT", "RST 1", "PUSH/POP", "DAD H/BC/DE/SP only", "XRA A (clear A)", "XRI imm (8080 okay)", "RAL/RAR", "RLC/RRC"]
+  avoid:
+    - "DAD with single registers (illegal)"
+    - "Z80 bit/ix/iy instructions"
+    - "Assuming stack top; if needed, set SP via LXI SP,<safe> only if you understand your TPA"
+  printing:
+    bdos_functions:
+      2: "CONOUT — E=char"
+      6: "Direct console I/O — E=FFh for status/peek"
+      9: "Print '$'-terminated string — DX points at string"
+      15: "Open FCB"
+      16: "Close FCB"
+      19: "Delete FCB"
+      20: "Read sequential"
+      21: "Write sequential"
+      22: "Make FCB"
+      26: "Set DMA (DE=addr)"
+  strings:
+    dollar_terminated: "Use for BDOS 9: e.g., DB 'Hello','$'"
+    zero_terminated: "For internal helper loops"
+
+protocols:
+  raw_mirror:
+    desc: "OUT <= (IN ^ IN_INV) ^ OUT_INV (all 8 bits)"
+    usage: "One side only to avoid feedback; fastest possible echo."
+  strobe_7bit:
+    desc: "D0..D6 = data, D7 = strobe. Rising edge = valid, peer mirrors and strobes back."
+    rx_rule: "Latch data on D7 rising edge; ignore when stable-high; detect falling to arm next byte."
+    tx_rule: "Drive data, optional pre-delay, raise D7, hold width, drop D7; keep data stable."
+    timings:
+      pre: 1
+      high: 8
+      post: 1
+    tweak: "Increase if the other side misses pulses."
+  ascii_line:
+    desc: "Send ASCII bytes using strobe_7bit; end line with LF (10). CR (13) is ignored."
+    example:
+      foreman_to_worker: "CHK <hex>\n"
+      worker_reply: "OK <hex> <0|1>\n"
+
+templates:
+  skeleton_com_asm: |
+    ; ---------- CP/M .COM skeleton (8080) ----------
+    ORG 0100H
+    START:
+        ; your code here
+        RET
+    END START
+
+  sc719_hal_equ: |
+    ; ---------- SC719 HAL equates ----------
+    DIO_PORT    EQU 030H   ; base I/O (0x30 / 48)
+    IN_INV      EQU 000H   ; set 0FFH if inputs are inverted
+    OUT_INV     EQU 000H   ; set 0FFH if outputs (LEDs) are active-low
+
+  sc719_raw_mirror: |
+    ; ---------- RAW MIRROR (all 8 bits) ----------
+    ORG 0100H
+    DIO_PORT    EQU 030H
+    IN_INV      EQU 000H
+    OUT_INV     EQU 000H
+    START:
+        IN  DIO_PORT
+        XRI IN_INV
+        XRI OUT_INV
+        OUT DIO_PORT
+    LOOP:
+        IN  DIO_PORT
+        XRI IN_INV
+        XRI OUT_INV
+        OUT DIO_PORT
+        JMP LOOP
+    END START
+
+  sc719_txrx_strobe: |
+    ; ---------- STROBE TX/RX (D7=strobe, D0..D6=data) ----------
+    ; Equates:
+    ;   DIO_PORT EQU 030H
+    ;   IN_INV/OUT_INV EQU 00H or 0FFH
+    ;   DLY_PRE EQU 01H, DLY_STB EQU 08H, DLY_POST EQU 01H
+    ;
+    ; RX_BYTE: A <- byte (0..127) on rising edge; A=0FFh if none.
+    PREV    DB 00H
+    RX_BYTE:
+        IN  DIO_PORT
+        XRI IN_INV
+        MOV D,A
+        ANI 080H
+        MOV E,A
+        LDA PREV
+        ORA A
+        JNZ RB_HI
+        MOV A,E
+        ORA A
+        JZ  RB_NONE
+        MOV A,D
+        ANI 07FH
+        MVI D,080H
+        STA PREV
+        RET
+    RB_HI:
+        MOV A,E
+        ORA A
+        JZ  RB_SET0
+        MVI A,080H
+        STA PREV
+        JMP RB_NONE
+    RB_SET0:
+        XRA A
+        STA PREV
+    RB_NONE:
+        MVI A,0FFH
+        RET
+
+    ; TX_BYTE: send A (only low 7 bits) and strobe on D7
+    TX_BYTE:
+        ANI 07FH
+        MOV B,A
+        MOV A,B
+        XRI OUT_INV
+        OUT DIO_PORT
+        MVI C,01H   ; DLY_PRE
+    TXD1: DCR C
+        JNZ TXD1
+        MOV A,B
+        ORI 080H
+        XRI OUT_INV
+        OUT DIO_PORT
+        MVI C,08H   ; DLY_STB
+    TXD2: DCR C
+        JNZ TXD2
+        MOV A,B
+        XRI OUT_INV
+        OUT DIO_PORT
+        MVI C,01H   ; DLY_POST
+    TXD3: DCR C
+        JNZ TXD3
+        RET
+
+  rtc_read_hbios: |
+    ; ---------- HBIOS RTC GET TIME (BCD YY MM DD HH MM SS) ----------
+    ; B=20h, HL -> 6-byte buffer, RST 1
+    RTCBUF: DS 6
+    READRTC:
+        LXI H,RTCBUF
+        MVI B,020H
+        RST 1
+        RET
+
+  bcd_to_bin_and_p2dig: |
+    ; ---------- BCD helpers ----------
+    ; Input: A=BCD (0x00..0x99). Output: A=binary 0..99
+    BCD2BIN:
+        MOV D,A
+        ANI 0FH
+        MOV E,A
+        MOV A,D
+        ANI 0F0H
+        RRC
+        RRC
+        RRC
+        RRC
+        MOV B,A
+        MOV A,B
+        ADD A
+        MOV C,A
+        MOV A,B
+        ADD A
+        ADD A
+        ADD A
+        ADD C
+        ADD E
+        RET
+    ; Print two ASCII digits from BCD in A (uses BDOS 2)
+    BDOS    EQU 0005H
+    CONOUT  EQU 2
+    PCHAR:
+        MVI C,CONOUT
+        CALL BDOS
+        RET
+    P2DIG:
+        MOV D,A
+        ANI 0FH
+        ADI '0'
+        MOV L,A
+        MOV A,D
+        ANI 0F0H
+        RRC
+        RRC
+        RRC
+        RRC
+        ADI '0'
+        MOV H,A
+        MOV E,H
+        CALL PCHAR
+        MOV E,L
+        CALL PCHAR
+        RET
+
+  file_seq_1k_example: |
+    ; ---------- CP/M sequential file example (1 KB write then read) ----------
+    BDOS    EQU 0005H
+    FCB     EQU FCBLOC
+    DMAADDR EQU DMABUF
+    ORG 0100H
+    START:
+        ; delete old
+        LXI D,FCBLOC
+        MVI C,19
+        CALL BDOS
+        ; make
+        LXI D,FCBLOC
+        MVI C,22
+        CALL BDOS
+        ; fill 1 KB buffer
+        LXI H,DMABUF
+        MVI A,055H
+        LXI B,0400H
+    FILL: MOV M,A
+        INX H
+        DCX B
+        MOV A,B
+        ORA C
+        JNZ FILL
+        ; set DMA
+        LXI D,DMABUF
+        MVI C,26
+        CALL BDOS
+        ; write 8 records (8*128=1024)
+        LXI D,FCBLOC
+        MVI B,08H
+    WLP:  MVI C,21
+        CALL BDOS
+        DCR B
+        JNZ WLP
+        ; close
+        LXI D,FCBLOC
+        MVI C,16
+        CALL BDOS
+        RET
+    ; --- data ---
+    FCBLOC:
+        DB 0,'D','E','M','O','1','K',' ',' ',' ',' '
+        DB 'D','A','T'
+        DS 20
+    DMABUF: DS 1024
+    END START
+
+  mbasic_sc719_handshake: |
+    10 REM MBASIC SC719 strobe handshake (D7=strobe, D0..D6=data)
+    20 DEFINT A-Z: PO=48: IV=0: D1=60: D2=160: D3=60
+    30 V=0: GOSUB 500
+    40 ' TX: put B (0..127)
+    50 '   GOSUB 600
+    60 ' RX: GOSUB 650 -> RA=1 when RB valid
+    500 IF IV=255 THEN OUT PO,255-V ELSE OUT PO,V: RETURN
+    600 D=B AND 127: V=D: GOSUB 500: FOR J=1 TO D1: NEXT J
+    610 V=D OR 128: GOSUB 500: FOR J=1 TO D2: NEXT J
+    620 V=D: GOSUB 500: FOR J=1 TO D3: NEXT J: RETURN
+    630 S=INP(PO): IF IV=255 THEN S=255-S
+    640 SB=S AND 128
+    650 IF SB=0 THEN LS=0: RA=0: RETURN
+    660 IF LS=0 THEN RB=S AND 127: RA=1: LS=128: RETURN
+    670 RA=0: RETURN
+
+checklist_before_run:
+  - "Verify SC719 base I/O (JP1) is 0x30 (48) on *both* boards."
+  - "Tie GND↔GND; keep ribbon short; avoid running mirror on both ends."
+  - "If LEDs look inverted, set IV=255 (BASIC) and/or IN_INV/OUT_INV=0FFH (ASM)."
+  - "For strobe protocols, start the listener first if possible; otherwise both ends should tolerate startup ordering."
+  - "When measuring speed, prefer RTC via HBIOS (RST 1, B=20h) or calibrated loop only if RTC absent."
+
+known_quirks_and_tips:
+  - "ASM.COM requires hex with trailing H and leading 0 when starting with A–F (e.g., 0A0H)."
+  - "8080 `DAD` only accepts BC/DE/HL/SP; never `DAD B` etc."
+  - "Use `XRA A` to clear A; `ORA A` to test zero (sets flags)."
+  - "BDOS 6 with E=0FFh is great for non-blocking keystroke checks; returns 0 if none."
+  - "BDOS 9 strings stop at `$` and do not print `$`."
+  - "For CP/M sequential I/O, always `SET DMA` (BDOS 26) before each read/write block."
+  - "When using the strobe, keep data stable while D7 is high; drop strobe only after the peer can sample."
+  - "Avoid delays inside the RX edge path; TX may shape strobe with tiny delays if needed."
+
