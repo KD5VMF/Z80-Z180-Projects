@@ -10,4 +10,4 @@
 100 D = D + 2: GOTO 80
 130 N = N + 2
 140 A$ = INKEY$: IF A$ = "Q" OR A$ = "q" THEN END
-150 GOTO 60
+150 GOTO 60
