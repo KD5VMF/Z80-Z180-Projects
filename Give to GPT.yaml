@@ -67,6 +67,7 @@ coding_conventions:
     - "DAD with single registers (illegal)"
     - "Z80 bit/ix/iy instructions"
     - "Assuming stack top; if needed, set SP via LXI SP,<safe> only if you understand your TPA"
+    
   printing:
   bdos_functions:
     0:  "System reset (warm boot) — no params; no return"
@@ -789,4 +790,5 @@ known_quirks_and_tips:
   - "For CP/M sequential I/O, always `SET DMA` (BDOS 26) before each read/write block."
   - "When using the strobe, keep data stable while D7 is high; drop strobe only after the peer can sample."
   - "Avoid delays inside the RX edge path; TX may shape strobe with tiny delays if needed."
+
 
