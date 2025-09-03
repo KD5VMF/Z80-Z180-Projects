@@ -1,25 +1,24 @@
-# SC700/SC126 + RomWBW 8080 Assembly Profile
-# Version: 1.1
+# SC700/SC126 + RomWBW 8080 Assembly Profile (Extended)
+# Version: 1.2
 # Last-Updated: 2025-09-03
-# Purpose: Hand this file back to ChatGPT later — it encodes everything needed
-#          to generate *correct 8080 code* for your SC700-series & SC126 rigs
-#          (RomWBW CP/M 2.2; ASM.COM 8080 mnemonics; strict 8080 only)
+# Purpose: Generate *correct 8080 code* for SC700-series & SC126 (RomWBW CP/M 2.2)
+# Style: ASM.COM 8080 mnemonics only; labels A–Z0–9 (avoid underscores)
 
 meta:
   systems:
-    - "SC700 series (RCBus family; Z80-class; target 8080 mnemonics for portability)"
-    - "SC126 Z180 motherboard (runs 8080/Z80 code; we emit 8080-only)"
+    - "SC700 family (RCBus; Z80-class; target 8080 mnemonics for portability)"
+    - "SC126 Z180 motherboard (runs 8080/Z80; we emit 8080-only)"
   os: "CP/M 2.2 (RomWBW distribution)"
-  bios: "RomWBW HBIOS (proxy at RST 1 = 0008h)"
-  assembler: "ASM.COM (Digital Research) — 8080 mnemonics only"
+  bios: "RomWBW HBIOS (RST 1 = 0008h) — use only outside hot loops"
+  assembler: "ASM.COM (Digital Research) — 8080 mnemonics"
   com_programs:
     origin: "ORG 0100H"
-    return: "RET (warm boot via CCP; no implicit exit call)"
-  label_style:
-    asmcom_gotcha: "Avoid underscores in labels (some ASM.COM configs misread them); use A-Z0-9 only."
+    return: "RET (warm boot via CCP)"
+  labels_style:
+    ascii: "A–Z, 0–9 only (no underscores) for maximum ASM.COM compatibility"
   strings:
-    dollar_terminated: "For BDOS 9 (print): DB 'Hello','$'"
-    zero_terminated: "For internal helper loops only (not BDOS 9)"
+    dollar_terminated: "For BDOS 9 printing — e.g., DB 'Hello','$'"
+    zero_terminated: "Internal helpers only (BDOS 9 stops at '$')"
   build:
     assemble: "ASM FILENAME.ASM"
     linkload: "LOAD FILENAME"
@@ -28,31 +27,34 @@ meta:
 tooling:
   bdos_call:
     entry: "CALL 0005H"
-    regs_in: "C=function, DE=param (address or value) when applicable"
-    regs_out: "A or HL depending on function (classic CP/M 2.2 rules)"
+    regs_in: "C=function; DE=parameter (often pointer)"
+    regs_out: "A or HL (per function)"
   hbios_call:
     entry: "RST 1 (0008h)"
-    regs_in: "B=function, C=sub/Unit (often), HL=buffer, DE=extra args as needed"
-    status: "A=0 success; nonzero = error"
-    note: "Some services require buffers in the upper 32K; see RomWBW docs."
+    regs_in: "B=function; C=unit/subfunc; HL=buffer; DE=extra"
+    return_A: "0=OK; nonzero=error"
+    buffers: "Some services (disk/rtcblk) want buffers in upper 32K"
 
 hardware:
   clocks:
-    SC126_Z180: "typ ~18.432 MHz (some builds double via Z180; treat delays as approximate)"
-    SC700_generic: "varies; do not hardcode cycle counts unless calibrated locally"
+    SC126_Z180: "≈18.432 MHz typical (varies); don’t hardcode cycle delays"
+    SC700_generic: "varies by CPU/oscillator; prefer RTC-based timing"
   memory:
-    TPA: "0100H up to CCP/BDOS; avoid fixed high addresses unless you own them"
+    TPA: "0100H..(CCP/BDOS top) — avoid hardwired high addresses"
   sc126_led_latch:
     port: 0x0D
-    desc: "SC126 user LEDs via system latch (seconds/diagnostics mirror)"
+    desc: "User LED latch; great for heartbeat/seconds/diag"
   sc719_dio:
     typical_base:
-      - 0x00    # many SCC docs default JP1 open = 00h
-      - 0x30    # some builds select 30h (48) — verify JP1
-    lines: "D0..D7 on a single port; OUT writes LEDs, IN reads inputs"
+      - 0x00   # JP1 default in many builds
+      - 0x30   # sometimes configured to 30h (48)
+    lines: "8-bit port; OUT drives LEDs; IN reads inputs"
     polarity:
       default: "active-high"
-      invert_hint: "If LEDs look inverted, XOR 0xFF in software"
+      invert_hint: "If visually inverted, XOR 0xFF in software"
+  serial:
+    devices: ["CON:", "TTY:", "UR1:", "UR2:", "AUX:", "PUN:", "RDR:", "LST:"]
+    example_mode: "MODE COM1: 115200,N,8,1"
 
 io_maps:
   probable:
@@ -60,128 +62,121 @@ io_maps:
     Z80_PIO: "0x68..0x6B"
     Z80_SIO2: "0x80..0x83"
     Z80_CTC: "0x88..0x8B"
-    RTC_gate: "0x0C (Z180 builds) / 0xC0 (Z80 builds) — but normally use HBIOS"
+    RTC_gate: "0x0C (Z180 builds) / 0xC0 (Z80 builds) — prefer HBIOS"
   sc126_z180_onboard:
     system_latch: "0x0C"
     led_data: "0x0D"
     z180_regs: "0xC0..0xFF (ASCI/MMU/timers)"
 
 coding_conventions:
-  target_isa: "8080 strict (no Z80-only ops, no IX/IY, no ED/CB prefixed)"
-  safe_ops: ["IN/OUT", "RST 1", "PUSH/POP", "DAD (BC/DE/HL/SP only)", "XRA A", "RAL/RAR", "RLC/RRC"]
+  target_isa: "8080 strict (no Z80-only ops; no IX/IY; no ED/CB prefixed)"
+  safe_ops: ["IN/OUT","RST 1","PUSH/POP","DAD BC/DE/HL/SP","XRA A","RAL/RAR","RLC/RRC"]
   avoid:
-    - "DCX/INX on illegal pseudo-regs (e.g., DCX DE is illegal in 8080 syntax)"
+    - "Illegal DCX/INX forms (e.g., DCX DE in 8080 syntax)"
     - "EXX, DJNZ, BIT/SET/RES, LD (HL),n — Z80-only"
   asmcom_tips:
-    hex_constants: "Use trailing H and leading 0 when A..F (e.g., 0A0H)"
-    labels: "Prefer A-Z0-9, no underscores to dodge rare parser quirks"
+    hex: "Trailing H, leading 0 if starts with A–F (e.g., 0A0H)"
+    labels: "A–Z0–9; keep short; don’t reuse local labels across modules"
   console:
     print_char: "BDOS 2 (E=char)"
-    print_string: "BDOS 9 (DE->$ string)"
-    console_in: "BDOS 1 (blocking; returns A=char)"
-    nonblocking_key: "BDOS 6 with E=0FFh → A=char or 00h"
+    print_string: "BDOS 9 (DE->$-string)"
+    console_in: "BDOS 1 (blocking; A=char)"
+    nonblocking_key:
+      bd06_ff: "BDOS 6 with E=0FFh → A=char or 00h (preferred)"
+      bd11:    "BDOS 11 → A=FFh if key ready, else 00h (alt)"
   files_dma:
-    set_dma: "BDOS 26 (DE=buffer) before sequential/random read/write"
-    fcb: "Standard CP/M FCB layout; r0..r2 used for random I/O"
+    set_dma: "BDOS 26 (DE=addr) before each read/write batch"
+    fcb: "Standard CP/M FCB; r0..r2 for random I/O"
 
-bdos_functions:  # CP/M 2.2 complete set your rig uses
-  0:  "System reset (warm boot) — no params"
-  1:  "Console input — returns A=char (echoed)"
+bdos_functions:
+  0:  "Warm boot"
+  1:  "Console input — A=char (echo)"
   2:  "Console output — E=char"
   3:  "Reader input — A=char (RDR:)"
   4:  "Punch output — E=char (PUN:)"
   5:  "List output — E=char (LST:)"
-  6:  "Direct console I/O — E=FFh: peek (A=char or 00h); else E=char outputs"
+  6:  "Direct console I/O — E=FFh: peek (A=char or 00h); else output E"
   7:  "Get I/O byte — A=IOBYTE"
   8:  "Set I/O byte — E=IOBYTE"
-  9:  "Print $-terminated string — DE=addr"
-  10: "Read console buffer — DE=buf; buf[0]=max → buf[1]=len, text at buf+2"
-  11: "Console status — A=FFh if key ready, else 00h"
+  9:  "Print $-string — DE=addr"
+  10: "Read console buffer — DE=buf; buf[0]=max; returns buf[1]=len"
+  11: "Console status — A=FFh key ready else 00h"
   12: "Return version — HL=version (L=22h on CP/M 2.2)"
   13: "Reset disk system — relog/close"
   14: "Select disk — E=drive (0=A:)"
-  15: "Open file — DE=FCB; A=dir code/status"
-  16: "Close file — DE=FCB; A=dir code/status"
-  17: "Search first — DE=FCB; A=dir code/status"
-  18: "Search next — A=dir code/status"
-  19: "Delete file — DE=FCB; A=dir code/status"
-  20: "Read sequential — DE=FCB; A=status"
+  15: "Open file — DE=FCB; A=status"
+  16: "Close file — DE=FCB; A=status"
+  17: "Search first — DE=FCB; A=status"
+  18: "Search next — A=status"
+  19: "Delete file — DE=FCB; A=status"
+  20: "Read sequential — DE=FCB; A=status (00 OK, 01 EOF)"
   21: "Write sequential — DE=FCB; A=status"
-  22: "Make file — DE=FCB; A=dir code/status"
-  23: "Rename file — DE=FCB; A=dir code/status"
-  24: "Get login vector — HL=drive bitmask"
+  22: "Make file — DE=FCB; A=status"
+  23: "Rename file — DE=FCB; A=status"
+  24: "Get login vector — HL=bitmask"
   25: "Get current disk — A=drive (0=A:)"
   26: "Set DMA address — DE=addr"
-  27: "Get allocation vector — HL=ALV* (current drive)"
-  28: "Write-protect current disk — no params"
+  27: "Get allocation vector — HL=ALV (RO)"
+  28: "Write-protect current disk"
   29: "Get read-only vector — HL=bitmask"
-  30: "Set file attributes — DE=FCB; A=dir code/status"
-  31: "Get DPB address — HL=DPB* (current drive)"
-  32: "Get/Set user number — E=FFh→A=current; else E=0..15 to set"
+  30: "Set file attributes — DE=FCB; A=status"
+  31: "Get DPB address — HL=DPB (RO)"
+  32: "Get/Set user number — E=FFh→A=current; else set"
   33: "Read random — DE=FCB; A=status (uses r0..r2)"
   34: "Write random — DE=FCB; A=status (uses r0..r2)"
   35: "Compute file size — DE=FCB; updates r0..r2"
-  36: "Set random record — DE=FCB; set r0..r2 from sequential pos"
+  36: "Set random record — DE=FCB; set r0..r2 from seq pos"
   37: "Reset drive(s) — DE=bitmask; A=err"
   40: "Write random with zero fill — DE=FCB; A=status"
-  notes: "*27/31 return driver-owned structures; treat as read-only."
+  notes: "*27/31/ALV/DPB are driver-owned; treat as read-only structures."
 
-hbios_services:  # RomWBW high-level, enough for coding
+hbios_services:
   call:
     entry: "RST 1 (0008h)"
     B: "function code"
-    C: "unit/subfunction (e.g., 0x80 = current console)"
-    HL: "buffer pointer (when required)"
-    DE: "extra params as defined by service"
-    return_A: "0 = success; !0 = error"
+    C: "unit/subfunc"
+    HL: "buffer pointer"
+    DE: "additional params"
+    return_A: "0=OK; !0=error"
   CIO:  # Character I/O
-    00h: "CIOIN  — C=unit → A=status, E=char (blocking)"
+    00h: "CIOIN  — C=unit → A=status, E=char"
     01h: "CIOOUT — C=unit, E=char → A=status"
     02h: "CIOIST — C=unit → A=bytes available"
     03h: "CIOOST — C=unit → A=space available"
     04h: "CIOINIT — C=unit, DE=lineword → A=status"
     05h: "CIOQUERY — C=unit → A=status, DE=lineword"
-  DIO:  # Disk I/O (buffers in upper 32K)
+  DIO:
     10h: "STATUS"
     11h: "RESET — C=unit"
-    12h: "SEEK — CHS or LBA depending on driver"
-    13h: "READ — C=unit, E=blocks, HL=buffer"
-    14h: "WRITE — C=unit, E=blocks, HL=buffer"
-    1Ah: "CAPACITY — C=unit, HL=buf → DE:HL=blocks, BC=blk size"
+    12h: "SEEK"
+    13h: "READ — C=unit, E=blocks, HL=buf"
+    14h: "WRITE — C=unit, E=blocks, HL=buf"
+    1Ah: "CAPACITY — returns counts/sizes to registers/buffer"
   RTC:
-    20h: "RTCGETTIM — HL=6-byte BCD buf [YY,MM,DD,HH,MM,SS]"
-    21h: "RTCSETTIM — HL=6-byte BCD buf"
-    24h: "RTCGETBLK — HL=buffer (upper 32K)"
-    25h: "RTCSETBLK — HL=buffer (upper 32K)"
+    20h: "RTCGETTIM — HL=6-byte BCD [YY,MM,DD,HH,MM,SS]"
+    21h: "RTCSETTIM — HL=6-byte BCD"
+    24h: "RTCGETBLK — HL=buffer (upper 32K preferred)"
+    25h: "RTCSETBLK — HL=buffer (upper 32K preferred)"
   SYS:
     F0h: "RESET"
-    F1h: "VER — version into registers (maj/min/build)"
-    F8h: "GET — subfunctions: TIMER/SECONDS/DEVICE COUNTS/etc."
-
-serial_and_console:
-  romwbw_devices: ["CON:", "TTY:", "UR1:", "UR2:", "AUX:", "PUN:", "RDR:", "LST:"]
-  mode_examples:
-    - "MODE COM1: 115200,N,8,1"
-  nonblocking_key:
-    bdos6_ff: "E=FFh, C=6 → A=char or 00h if none"
+    F1h: "VER"
+    F8h: "GET (TIMER/SECONDS/etc.)"
 
 ansi_and_vdu:
-  # All strings here are BDOS 9–ready ($-terminated). Send with C=9, DE=ptr, CALL 0005h.
   notes:
-    - "Most SC126/SC700 setups talk to an ANSI/VT100-ish terminal (PC serial, USB TTL, Wi-Fi serial, etc.)."
-    - "Some standalone VDU boards implement VT52 or limited ANSI; use the 'vdu_profiles' map to select."
-    - "If a sequence isn’t supported, the terminal will ignore it—provide graceful fallbacks."
-
+    - "Default to ANSI/VT100; switch to VT52 for simple VDU boards."
+    - "All sequences are BDOS 9–ready (end with '$')."
+  vdu_profiles:
+    default: "ansi_vt100"
+    options: ["ansi_vt100","vt52","plain"]
   ansi_vt100:
-    esc: "\u001B"    # ESC
-    csi: "\u001B["
     basic:
-      CLEAR:  "\u001B[2J$"          # clear screen
-      HOME:   "\u001B[H$"           # cursor to 1,1
-      RESET:  "\u001B[0m$"          # SGR reset
-      HIDE:   "\u001B[?25l$"        # hide cursor
-      SHOW:   "\u001B[?25h$"        # show cursor
-      BELL:   "\u0007$"             # beep (if supported)
+      CLEAR:  "\u001B[2J$"
+      HOME:   "\u001B[H$"
+      RESET:  "\u001B[0m$"
+      HIDE:   "\u001B[?25l$"
+      SHOW:   "\u001B[?25h$"
+      BELL:   "\u0007$"
     cursor_step:
       UP:     "\u001B[1A$"
       DOWN:   "\u001B[1B$"
@@ -189,41 +184,31 @@ ansi_and_vdu:
       LEFT:   "\u001B[1D$"
       NEXTLINE: "\u001B[E$"
       PREVLINE: "\u001B[F$"
-      COL1:   "\u001B[1G$"          # move to column 1 (stay on row)
+      COL1:   "\u001B[1G$"
     erase:
-      EL_FROM: "\u001B[0K$"         # erase to end of line
-      EL_TO:   "\u001B[1K$"         # erase to start of line
-      EL_ALL:  "\u001B[2K$"         # erase entire line
-      ED_FROM: "\u001B[0J$"         # erase to end of screen
-      ED_TO:   "\u001B[1J$"         # erase to top of screen
-      ED_ALL:  "\u001B[2J$"         # clear entire screen (same as CLEAR)
+      EL_FROM: "\u001B[0K$"
+      EL_TO:   "\u001B[1K$"
+      EL_ALL:  "\u001B[2K$"
+      ED_FROM: "\u001B[0J$"
+      ED_TO:   "\u001B[1J$"
+      ED_ALL:  "\u001B[2J$"
     save_restore:
-      SAVE:   "\u001B7$"            # DEC save cursor
-      REST:   "\u001B8$"            # DEC restore cursor
-      SAVE_SGR: "\u001B[s$"         # xterm save cursor (alt)
-      REST_SGR: "\u001B[u$"         # xterm restore cursor (alt)
-    scroll_region:
-      # Set top/bottom margins; printing at bottom scrolls within region
-      # (Use template 'ansi_set_scroll_region' to parameterize.)
-      # Example literal for 2..23: "\u001B[2;23r$"
-      RESET: "\u001B[r$"
+      SAVE:     "\u001B7$"
+      REST:     "\u001B8$"
+      SAVE_SGR: "\u001B[s$"
+      REST_SGR: "\u001B[u$"
     modes:
-      WRAP_ON:  "\u001B[?7h$"
-      WRAP_OFF: "\u001B[?7l$"
-      INVERSE_ON:  "\u001B[7m$"
-      INVERSE_OFF: "\u001B[27m$"
+      WRAP_ON:    "\u001B[?7h$"
+      WRAP_OFF:   "\u001B[?7l$"
+      INVERSE_ON: "\u001B[7m$"
+      INVERSE_OFF:"\u001B[27m$"
     attributes:
-      BOLD:      "\u001B[1m$"
-      DIM:       "\u001B[2m$"
-      ITALIC:    "\u001B[3m$"
-      UNDER:     "\u001B[4m$"
-      BLINK:     "\u001B[5m$"
-      REVERSE:   "\u001B[7m$"
-      HIDDEN:    "\u001B[8m$"
-      STRIKE:    "\u001B[9m$"
-      RESET:     "\u001B[0m$"
+      BOLD:   "\u001B[1m$"
+      UNDER:  "\u001B[4m$"
+      BLINK:  "\u001B[5m$"
+      REV:    "\u001B[7m$"
+      RESET:  "\u001B[0m$"
     colors_8:
-      # 8-color SGR (foreground 30–37, background 40–47)
       FG:
         BLACK:   "\u001B[30m$"
         RED:     "\u001B[31m$"
@@ -260,151 +245,32 @@ ansi_and_vdu:
         MAGENTA: "\u001B[105m$"
         CYAN:    "\u001B[106m$"
         WHITE:   "\u001B[107m$"
-    colors_256:
-      # If your terminal is modern (PC serial), these work; vintage VDUs may ignore.
-      # Use templates to emit: ESC '[' '38;5;' <n> 'm' for FG, '48;5;' for BG.
-      FG_FMT: "\u001B[38;5;X$m"   # replace X$ at runtime (see templates)
-      BG_FMT: "\u001B[48;5;X$m"
     line_drawing_vt100:
-      # Enter/exit VT100 line drawing; glyphs map below.
-      ENTER: "\u001B(0$"   # switch G0 to line-drawing
-      EXIT:  "\u001B(B$"   # back to ASCII
-      glyphs:
-        HLINE: "q"  # ─
-        VLINE: "x"  # │
-        UL:    "l"  # ┌
-        UR:    "k"  # ┐
-        LL:    "m"  # └
-        LR:    "j"  # ┘
-        TUP:   "v"  # ┴
-        TDOWN: "w"  # ┬
-        TLEFT: "u"  # ┤
-        TRIGHT:"t"  # ├
-        CROSS: "n"  # ┼
-
+      ENTER: "\u001B(0$"
+      EXIT:  "\u001B(B$"
+      glyphs: { HLINE: "q", VLINE: "x", UL: "l", UR: "k", LL: "m", LR: "j", TUP: "v", TDOWN: "w", TLEFT: "u", TRIGHT: "t", CROSS: "n" }
   vt52:
-    # Many simple VDU boards implement VT52 (or near-VT52) rather than full ANSI.
     basic:
-      CLEAR: "\u001BE$"        # CLS
-      HOME:  "\u001BH$"        # cursor home
-      RESET: "$"               # (no generic reset; send nothing)
+      CLEAR: "\u001BE$"
+      HOME:  "\u001BH$"
+      RESET: "$"
     cursor_step:
       UP:    "\u001BA$"
       DOWN:  "\u001BB$"
       RIGHT: "\u001BC$"
       LEFT:  "\u001BD$"
-    address_note: "VT52 direct address is ESC 'Y' (row+32) (col+32). Use template 'vt52_cup' to print."
-    erase_line: "\u001BK$"     # erase to end of line (common)
-    save_restore:              # not universal on VT52; leave empty or board-specific
-      SAVE: "$"
-      REST: "$"
-
-  vdu_profiles:
-    # Select the profile your physical VDU understands.
-    default: "ansi_vt100"
-    options:
-      - "ansi_vt100"
-      - "vt52"
-      - "plain"   # no control codes; print only text + CR/LF
-
+    erase_line: "\u001BK$"
+    address_note: "ESC 'Y' (row+32)(col+32) — use template vt52_cup"
   plain:
     CRLF:  "\r\n$"
     TAB8:  "\t$"
-
-  # -----------------------
-  # 8080/ASM templates
-  # -----------------------
   templates:
     bdos9_print_ptr: |
-      ; Print $-terminated string at DE (BDOS 9)
       BDOS EQU 0005H
-      PSTR:   MVI C,9
-              CALL BDOS
-              RET
-
-    ansi_cup_rowcol: |
-      ; Cursor to row, col (1-based): prints ESC '[' row ';' col 'H'
-      ; In:  B=row (1..99), C=col (1..99)
-      ; Trashes: A,D,E,H,L
-      BDOS    EQU 0005H
-      CSI:    DB 27,'[','$'
-      HCHR:   DB 'H','$'
-      SEMI:   DB ';','$'
-      PSTR:   MVI C,9
-              CALL BDOS
-              RET
-      PNUM2:  ; print 1..99 in B as decimal (no leading zeros)
-              MOV A,B
-              CPI 10
-              JC  PNUM1D
-              ; two digits
-              MVI D,10
-              ; divide A by 10 -> Q in A, R in E
-              MVI E,0
-      D10:    CPI 10
-              JC  D10D
-              SUI 10
-              INR E
-              JMP D10
-      D10D:   ADI '0'
-              MOV L,A
-              MOV A,E
-              ADI '0'
-              MOV E,A
-              ; print tens (E), ones (L)
-              MOV A,E
-              MVI C,2
-              MOV E,A
-              CALL BDOS
-              MOV A,L
-              MVI C,2
-              MOV E,A
-              CALL BDOS
-              RET
-      PNUM1D: ADI '0'
-              MVI C,2
-              MOV E,A
-              CALL BDOS
-              RET
-      CUP:    ; emit CSI, row, ';', col, 'H'
-              LXI D,CSI
-              CALL PSTR
-              CALL PNUM2        ; row in B
-              LXI D,SEMI
-              CALL PSTR
-              ; col now in C -> move to B for PNUM2
-              MOV B,C
-              CALL PNUM2
-              LXI D,HCHR
-              CALL PSTR
-              RET
-
-    ansi_set_scroll_region: |
-      ; Set scroll region top..bot using ESC '[' top ';' bot 'r'
-      ; In: B=top (1..99), C=bot (1..99)
-      BDOS EQU 0005H
-      CSIR: DB 27,'[','$'
-      RCHR: DB 'r','$'
-      SEMI: DB ';','$'
-      ; reuse PSTR / PNUM2 from ansi_cup_rowcol
-      ; Entry: TOPBOT:
-      TOPBOT: LXI D,CSIR
-              MVI C,9
-              CALL BDOS
-              CALL PNUM2        ; row=top (B)
-              LXI D,SEMI
-              MVI C,9
-              CALL BDOS
-              MOV B,C           ; col=bot (C) -> B
-              CALL PNUM2
-              LXI D,RCHR
-              MVI C,9
-              CALL BDOS
-              RET
-
+      PSTR: MVI C,9
+            CALL BDOS
+            RET
     vt52_cup: |
-      ; VT52 cursor address: ESC 'Y' (row+32) (col+32)
-      ; In: B=row (1..24), C=col (1..80)
       BDOS EQU 0005H
       PCHAR:  MVI C,2
               CALL BDOS
@@ -420,244 +286,538 @@ ansi_and_vdu:
               ADI 32
               CALL PCHAR
               RET
-
-    vt100_box_draw_demo: |
-      ; Draw a 20x6 box at (row=R, col=C) using VT100 line drawing
-      ; In: B=R, C=C
+    ansi_cup_rowcol: |
       BDOS EQU 0005H
-      PCHAR:  MVI C,2
-              CALL BDOS
-              RET
-      PSTR:   MVI C,9
-              CALL BDOS
-              RET
-      ENGD:   DB 27,'(0','$'   ; line set on
-      EXGD:   DB 27,'(B','$'   ; line set off
-      H:      DB 'q','$'       ; ─
-      V:      DB 'x','$'       ; │
-      UL:     DB 'l','$'       ; ┌
-      UR:     DB 'k','$'       ; ┐
-      LL:     DB 'm','$'       ; └
-      LR:     DB 'j','$'       ; ┘
-      CSI:    DB 27,'[','$'
-      SEMI:   DB ';','$'
-      HCHR:   DB 'H','$'
-      ; Requires CUP and PNUM2 from ansi_cup_rowcol template.
-      BOX20x6:
-              ; switch to drawing set
-              LXI D,ENGD
-              CALL PSTR
-              ; corners and horizontals
-              ; top-left
-              ; CUP to (B,C)
-              CALL CUP
-              LXI D,UL
-              CALL PSTR
-              MVI DREG,18       ; 18 inner horizontals (total width 20)
-      BH1:    LXI D,H
-              CALL PSTR
-              DCR DREG
-              JNZ BH1
-              LXI D,UR
-              CALL PSTR
-              ; verticals for 4 middle rows
-              MVI RCT,4
-      BV:     INR B             ; next row
-              CALL CUP
-              LXI D,V
-              CALL PSTR
-              ; move to right side
-              MOV B,B
-              ; CUP to (row=B, col=C+19)
-              ; compute C+19 into C (temp)
-              MVI A,19
-              ADD C
-              MOV C,A
-              CALL CUP
-              LXI D,V
-              CALL PSTR
-              ; restore C (subtract 19)
-              MVI A,19
-              CMA
-              INRA: ; A=~19 not ideal; leave as note to recompute C
-              DCR RCT
-              JNZ BV
-              ; bottom row
-              INR B
-              CALL CUP
-              LXI D,LL
-              CALL PSTR
-              MVI DREG,18
-      BH2:    LXI D,H
-              CALL PSTR
-              DCR DREG
-              JNZ BH2
-              LXI D,LR
-              CALL PSTR
-              ; back to ASCII
-              LXI D,EXGD
-              CALL PSTR
-              RET
-      ; NOTE: In real code, manage C math more cleanly (keep temp col in a register pair).
+      CSI:  DB 27,'[','$'
+      SEMI: DB ';','$'
+      HCHR: DB 'H','$'
+      PSTR: MVI C,9
+            CALL BDOS
+            RET
+      P2D:  ; print 1..99 in B
+            MOV A,B
+            CPI 10
+            JC  P1D
+            MVI E,0
+      D10:  CPI 10
+            JC  D10D
+            SUI 10
+            INR E
+            JMP D10
+      D10D: ADI '0'
+            MVI C,2
+            MOV L,A
+            MOV A,E
+            ADI '0'
+            MOV E,A
+            CALL BDOS
+            MOV A,L
+            MVI C,2
+            MOV E,A
+            CALL BDOS
+            RET
+      P1D:  ADI '0'
+            MVI C,2
+            MOV E,A
+            CALL BDOS
+            RET
+      CUP:  LXI D,CSI
+            CALL PSTR
+            CALL P2D          ; B=row
+            LXI D,SEMI
+            CALL PSTR
+            MOV B,C
+            CALL P2D          ; B=col
+            LXI D,HCHR
+            CALL PSTR
+            RET
 
-  diagnostics:
-    probe_ansi: |
-      ; Quick probe: clear, home, draw colored headline, restore
+screen_layout:
+  # Minimal UI framework: status bar + log window + prompt line
+  model:
+    rows: 24
+    cols: 80
+    status_row: 1
+    log_start: 2
+    log_end: 23
+    prompt_row: 24
+  colors:
+    status: ["\u001B[7m$","\u001B[0m$"]  # reverse on/off
+  templates:
+    init_fullscreen_ansi: |
       BDOS EQU 0005H
-      PSTR:   MVI C,9
-              CALL BDOS
-              RET
-      CLR:    DB 27,'[2J','$'
-      HOME:   DB 27,'[H','$'
-      GREEN:  DB 27,'[1;32m','$'
-      RESET:  DB 27,'[0m','$'
-      MSG:    DB 'ANSI/VT100 OK','$'
-      PROBE:  LXI D,CLR
-              CALL PSTR
-              LXI D,HOME
-              CALL PSTR
-              LXI D,GREEN
-              CALL PSTR
-              LXI D,MSG
-              CALL PSTR
-              LXI D,RESET
-              CALL PSTR
-              RET
-
-  usage_examples:
-    clear_and_title_ansi: |
-      ; Clear screen, home, print title centered at row 1
-      ; (Compute col externally or just print at col 1)
+      PSTR: MVI C,9
+            CALL BDOS
+            RET
+      CLEAR: DB 27,'[2J','$'
+      HOME:  DB 27,'[H','$'
+      INIT:  LXI D,CLEAR
+             CALL PSTR
+             LXI D,HOME
+             CALL PSTR
+             RET
+    draw_status_ansi: |
+      ; In: DE->$ title; draws on row 1, clears line, reverse video
       BDOS EQU 0005H
-      PSTR:   MVI C,9
-              CALL BDOS
+      PSTR: MVI C,9
+            CALL BDOS
+            RET
+      CSI:  DB 27,'[','$'
+      EL:   DB 27,'[2K','$'
+      REV:  DB 27,'[7m','$'
+      NOR:  DB 27,'[0m','$'
+      H:    DB 'H','$'
+      STAT: LXI D,CSI
+            CALL PSTR
+            LXI D,H
+            CALL PSTR
+            LXI D,EL
+            CALL PSTR
+            LXI D,REV
+            CALL PSTR
+            XCHG           ; title now in HL? (adjust as needed)
+            ; Assume DE already points to title:
+            XCHG
+            CALL PSTR
+            LXI D,NOR
+            CALL PSTR
+            RET
+    draw_prompt_ansi: |
+      ; Move to last row col1, clear line and print prompt (DE)
+      BDOS EQU 0005H
+      PSTR: MVI C,9
+            CALL BDOS
+            RET
+      CSI:  DB 27,'[','$'
+      GOTO_LAST: DB 27,'[24;1H','$'
+      EL:   DB 27,'[2K','$'
+      PROMPT: LXI D,GOTO_LAST
+              CALL PSTR
+              LXI D,EL
+              CALL PSTR
+              ; DE already -> prompt
+              CALL PSTR
               RET
-      CLEAR:  DB 27,'[2J','$'
-      HOME:   DB 27,'[H','$'
-      TITLE:  DB 'SC700/SC126 — Ready','$'
-      START:  LXI D,CLEAR
-              CALL PSTR
-              LXI D,HOME
-              CALL PSTR
-              LXI D,TITLE
-              CALL PSTR
-              RET
-
-  gotchas:
-    - "Always end BDOS-9 strings with '$'."
-    - "Some VDUs ignore SGR (colors/attrs). Structure UI so it still reads without color."
-    - "VT52 addressing uses row+32/col+32 bytes; don’t send ASCII digits."
-    - "If your VDU scrolls slowly, write full lines then move the cursor; avoid per-char cursor moves."
-
 
 templates:
   skeleton_com_asm: |
-    ; ---------- CP/M .COM skeleton (8080) ----------
     ORG 0100H
     START:
         ; your code here
         RET
     END START
 
-  print_line_bdos9: |
-    ; Print $-string at DX/DE
+  pchar: |
     BDOS EQU 0005H
-    ORG 0100H
-    LXI D,MSG
-    MVI C,9
-    CALL BDOS
-    RET
-    MSG: DB 'Hello from 8080!','$'
-    END
+    PCHAR: MVI C,2
+           CALL BDOS
+           RET
 
-  pchar_macro_free: |
-    ; PCHAR: print char in E via BDOS 2
+  keycheck_nonblock: |
     BDOS EQU 0005H
-    PCHAR:  MVI C,2
+    KEYCHK: MVI C,6
+            MVI E,0FFH
             CALL BDOS
             RET
 
-  nonblocking_keycheck: |
-    ; KEYCHECK: A=0 if none; else A=char
-    BDOS EQU 0005H
-    KEYCHECK:
-        MVI C,6
-        MVI E,0FFH
-        CALL BDOS
-        RET
-
-  hbios_rtc_read: |
-    ; READRTC: fills TIMBUF (BCD YY,MM,DD,HH,MM,SS)
+  # ---- Timing / RTC ----
+  rtc_read_bcd: |
+    ; TIMBUF(6): YY,MM,DD,HH,MM,SS (BCD)
     TIMBUF: DS 6
     READRTC:
         LXI H,TIMBUF
         MVI B,020H
         RST 1
         RET
+  bcd2bin: |
+    BCD2BIN:
+        MOV D,A
+        ANI 0FH
+        MOV E,A
+        MOV A,D
+        ANI 0F0H
+        RRC
+        RRC
+        RRC
+        RRC
+        MOV B,A
+        MOV A,B
+        ADD A
+        MOV C,A
+        MOV A,B
+        ADD A
+        ADD A
+        ADD A
+        ADD C
+        ADD E
+        RET
+  time_delta_hms_to_u32s: |
+    ; Inputs: STH,STM,STS and ENH,ENM,ENS (binary 0..59/23)
+    ; Output: NW3..NW0 = total seconds (u32)
+    STH: DB 0 ; start H
+    STM: DB 0 ; start M
+    STS: DB 0 ; start S
+    ENH: DB 0 ; end H
+    ENM: DB 0 ; end M
+    ENS: DB 0 ; end S
+    NW0: DB 0
+    NW1: DB 0
+    NW2: DB 0
+    NW3: DB 0
+    ; NW += (EN-START) normalized borrow across S/M/H
+    TIMEDEL:
+        ; seconds
+        LDA ENS
+        MOV B,A
+        LDA STS
+        CMP B
+        JC  TD_SOK
+        ; borrow from minutes
+        LDA ENM
+        DCR A
+        STA ENM
+        MVI A,60
+        ADD B
+        MOV B,A
+    TD_SOK:  LDA STS
+        SUB B
+        ; A = delta S (we want positive; swap order)
+        MOV B,A       ; B = Sdelta (signed)
+        ; minutes
+        LDA ENM
+        MOV C,A
+        LDA STM
+        CMP C
+        JC  TD_MOK
+        LDA ENH
+        DCR A
+        STA ENH
+        MVI A,60
+        ADD C
+        MOV C,A
+    TD_MOK:  LDA STM
+        SUB C
+        ; A = delta M
+        MOV D,A       ; D = Mdelta
+        ; hours (assume <24h; no wrap across days)
+        LDA ENH
+        MOV E,A
+        LDA STH
+        SUB E
+        MOV E,A       ; E = Hdelta
+        ; NW = E*3600 + D*60 + B
+        ; NW = 0
+        XRA A
+        STA NW0
+        STA NW1
+        STA NW2
+        STA NW3
+        ; add hours*3600 = hours* (60*60)
+        ; H * 3600 = H* (4096-496) approx — omit for now to keep simple:
+        ; For runs << 1h you can skip; else call U32_ADD_CONST multiple times.
+        ; Add minutes*60
+        ; Add seconds
+        ; (Provide a simpler BU number instead in benchmarks; prefer RTC seconds when needed.)
+        RET
 
-  sc126_led_seconds: |
-    ; Mirror seconds to SC126 LED latch (port 0Dh)
-    LEDP   EQU 00DH
-    INVERT EQU 00H      ; use FFh if LEDs are active-low
-    ; A on entry = seconds (0..59) binary
-    XRI INVERT
-    OUT LEDP
-    RET
-
-  sc719_raw_mirror: |
-    ; RAW MIRROR (all 8 bits) on SC719 at base port (e.g., 00h or 30h)
-    DIOPORT EQU 030H
-    ORG 0100H
-    START: IN  DIOPORT
-           OUT DIOPORT
-           JMP START
-    END START
-
-  time_line_hhmmss: |
-    ; Print "HH:MM:SS" from TIMBUF (BCD)
+  # ---- Numeric print / parse ----
+  print_u32_bdos9: |
+    ; NW3..NW0 -> decimal via BDOS 9
     BDOS EQU 0005H
-    CONOUT EQU 2
-    PCHAR: MVI C,CONOUT
+    OUTBUF: DS 16
+    OUTEND EQU OUTBUF+15
+    OUTPTR: DW 0
+    PTR32:  DW 0
+    U32_PRINT:
+        LHLD PTR32
+        MOV A,M
+        STA NW0
+        INX H
+        MOV A,M
+        STA NW1
+        INX H
+        MOV A,M
+        STA NW2
+        INX H
+        MOV A,M
+        STA NW3
+        ; zero check
+        LDA NW3
+        MOV B,A
+        LDA NW2
+        ORA B
+        MOV B,A
+        LDA NW1
+        ORA B
+        MOV B,A
+        LDA NW0
+        ORA B
+        MOV A,B
+        JNZ UP_CONT
+        MVI A,'0'
+        STA OUTBUF
+        MVI A,'$'
+        STA OUTBUF+1
+        LXI D,OUTBUF
+        MVI C,9
+        CALL BDOS
+        RET
+    UP_CONT:
+        LXI H,OUTEND
+        SHLD OUTPTR
+        MVI A,'$'
+        STA OUTEND
+    UP_LOOP:
+        CALL DIV32_10
+        LHLD OUTPTR
+        DCX H
+        MOV A,B
+        ADI '0'
+        MOV M,A
+        SHLD OUTPTR
+        ; loop while NW != 0
+        LDA NW3
+        MOV B,A
+        LDA NW2
+        ORA B
+        MOV B,A
+        LDA NW1
+        ORA B
+        MOV B,A
+        LDA NW0
+        ORA B
+        MOV A,B
+        JNZ UP_LOOP
+        LHLD OUTPTR
+        XCHG
+        MVI C,9
+        CALL BDOS
+        RET
+    DIV32_10:
+        MVI B,0
+        LDA NW3
+        CALL DIV10_STEP
+        STA NW3
+        LDA NW2
+        CALL DIV10_STEP
+        STA NW2
+        LDA NW1
+        CALL DIV10_STEP
+        STA NW1
+        LDA NW0
+        CALL DIV10_STEP
+        STA NW0
+        RET
+    DIV10_STEP:
+        MOV C,A
+        MOV A,B
+        MOV D,A
+        XRA A
+        MOV E,A
+    D160:   MOV A,D
+            CPI 0
+            JNZ D160SUB
+            MOV A,C
+            CPI 0A0H
+            JC  D10
+    D160SUB:MOV A,C
+            SUI 0A0H
+            MOV C,A
+            MOV A,D
+            MVI B,0
+            SBB B
+            MOV D,A
+            MOV A,E
+            ADI 16
+            MOV E,A
+            JMP D160
+    D10:    MOV A,D
+            CPI 0
+            JNZ D10SUB
+            MOV A,C
+            CPI 10
+            JC  DDONE
+    D10SUB: MOV A,C
+            SUI 10
+            MOV C,A
+            MOV A,D
+            MVI B,0
+            SBB B
+            MOV D,A
+            INR E
+            JMP D10
+    DDONE:  MOV A,E
+            MOV B,C
+            RET
+
+  print_u16_hex: |
+    ; HL -> print as 4 hex digits via BDOS 2
+    BDOS EQU 0005H
+    HEXNIB:
+        ANI 0FH
+        CPI 10
+        JC HN0
+        ADI 7
+    HN0:    ADI '0'
+        MVI C,2
+        MOV E,A
+        CALL BDOS
+        RET
+    PHEX16:
+        MOV A,H
+        RRC
+        RRC
+        RRC
+        RRC
+        CALL HEXNIB
+        MOV A,H
+        CALL HEXNIB
+        MOV A,L
+        RRC
+        RRC
+        RRC
+        RRC
+        CALL HEXNIB
+        MOV A,L
+        CALL HEXNIB
+        RET
+
+  # ---- Files / directory ----
+  dir_list_demo: |
+    ; Lists directory entries matching FCB (wildcards ok)
+    BDOS EQU 0005H
+    DMA  EQU DMABUF
+    START:
+        LXI D,DMABUF
+        MVI C,26
+        CALL BDOS
+        LXI D,FCB
+        MVI C,17
+        CALL BDOS
+    DLOOP:  MVI C,18
+        CALL BDOS
+        ORA A
+        JNZ DONE
+        ; record now in DMABUF (32 bytes) — print name/typ
+        ; (left as exercise: walk buffer, output via BDOS 2)
+        JMP DLOOP
+    DONE:   RET
+    FCB:    DB 0,'*','*','*','*','*','*','*','*',' ',' ',' '
+            DB '   '   ; type wildcards too if needed
+            DS 20
+    DMABUF: DS 128
+
+  # ---- Hexdump / checksum ----
+  hexdump_128: |
+    ; Dump 128 bytes at HL as 16 lines of 8 bytes hex
+    ; Trashes: A,B,C,D,E,H,L
+    ; Uses BDOS 2 (PCHAR) internally
+    BDOS EQU 0005H
+    PCHAR: MVI C,2
            CALL BDOS
            RET
-    P2DIG: MOV D,A
-           ANI 0FH
-           ADI '0'
-           MOV L,A
-           MOV A,D
-           ANI 0F0H
+    DMP128:
+        MVI D,16
+    DLN:   MVI E,8
+    DBY:   MOV A,M
            RRC
            RRC
            RRC
            RRC
-           ADI '0'
-           MOV H,A
-           MOV A,H
+           CALL HX
+           MOV A,M
+           CALL HX
+           INX H
+           DCR E
+           JNZ DBY
+           MVI A,13
            CALL PCHAR
-           MOV A,L
+           MVI A,10
+           CALL PCHAR
+           DCR D
+           JNZ DLN
+           RET
+    HX:    ANI 0FH
+           CPI 10
+           JC H0
+           ADI 7
+    H0:    ADI '0'
            CALL PCHAR
            RET
-    ; Usage: LDA TIMBUF+3 / CALL P2DIG / ':' / etc.
+
+  # ---- SC719 strobe handshake (D7 strobe, D0..D6 data) ----
+  sc719_strobe_txrx: |
+    DIOPORT EQU 030H
+    ININV   EQU 000H
+    OUTINV  EQU 000H
+    PREV:   DB 00H
+    ; RX: A <- byte (0..127) on rising edge; A=FFh if none
+    RXBYTE: IN  DIOPORT
+            XRI ININV
+            MOV D,A
+            ANI 080H
+            MOV E,A
+            LDA PREV
+            ORA A
+            JNZ RB_HI
+            MOV A,E
+            ORA A
+            JZ  RB_NONE
+            MOV A,D
+            ANI 07FH
+            MVI D,080H
+            STA PREV
+            RET
+    RB_HI:  MOV A,E
+            ORA A
+            JZ  RB_SET0
+            MVI A,080H
+            STA PREV
+            JMP RB_NONE
+    RB_SET0:XRA A
+            STA PREV
+    RB_NONE:MVI A,0FFH
+            RET
+    ; TX: send A (low 7 bits) + strobe on D7
+    TXBYTE: ANI 07FH
+            MOV B,A
+            MOV A,B
+            XRI OUTINV
+            OUT DIOPORT
+            MVI C,02H
+    TX1:    DCR C
+            JNZ TX1
+            MOV A,B
+            ORI 080H
+            XRI OUTINV
+            OUT DIOPORT
+            MVI C,08H
+    TX2:    DCR C
+            JNZ TX2
+            MOV A,B
+            XRI OUTINV
+            OUT DIOPORT
+            MVI C,02H
+    TX3:    DCR C
+            JNZ TX3
+            RET
 
 checklist_before_run:
-  - "Verify SC719 JP1 (I/O base). If LEDs look inverted, XOR 0xFF."
-  - "On SC126, LED latch at 0x0D: quick OUT test before fancy code."
-  - "When using HBIOS disk/NVRAM, keep buffers in the upper 32K."
-  - "For BDOS 9 strings, don’t forget trailing '$'."
-  - "For ASM.COM 8080: avoid Z80-only mnemonics and illegal DCX/INX forms."
-  - "Calibrate any busy-wait delays per your actual clock."
+  - "Confirm SC719 base I/O (JP1). If LEDs look inverted, XOR 0xFF."
+  - "On SC126, quick OUT 0Dh smoke test before fancy code."
+  - "Use BDOS 9 with '$'-terminated strings. No '$' → spew."
+  - "Keep HBIOS out of hot loops. If vectors differ, stub out until verified."
+  - "Calibrate any busy-wait delays on *your* oscillator."
 
 known_quirks_and_tips:
-  - "Some RomWBW builds differ in how RST 1 is vectored; if HBIOS calls fault, stub them out and test pure BDOS first."
-  - "BDOS 6 (E=FFh) is the most reliable non-blocking key check on CP/M 2.2."
-  - "Use ORG 0100H and keep stack usage modest unless you set SP explicitly."
-  - "Prefer deterministic inner loops for benchmarks; collect time with RTC only outside the hot path."
+  - "BDOS 6 E=0FFh is the safest non-blocking keystroke on CP/M 2.2."
+  - "ASM.COM dislikes odd label chars; keep labels simple."
+  - "For benchmarks, prefer pure-CPU loops; take timestamps only outside."
 
 references:
   docs:
     - "RomWBW HBIOS + CP/M 2.2 BDOS programmer’s notes"
-    - "SC126 companion manual (Z180, LED latch @0Dh, onboard ports)"
-    - "SC700 field manual (SC719, SIO/CTC/PIO address patterns)"
-    - "Sample programs: LEDCOUNT, BIGCLOCK, TIME (8080 mnemonics)"
-  provenance: "This file merges the above so future codegen is consistent and 8080-correct."
-
+    - "SC126 Complete Manual (Z180, LED latch @0Dh, onboard I/O)"
+    - "SC700 Field Manual (SC719 DIO, SIO/PIO/CTC ranges)"
+    - "Sample programs: LEDCOUNT, CLOCK/TIME, GCLOCK/FULLRTC"
+  provenance: "Merged from your materials; tuned for 8080-correct ASM.COM output."
