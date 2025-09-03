@@ -68,21 +68,50 @@ coding_conventions:
     - "Z80 bit/ix/iy instructions"
     - "Assuming stack top; if needed, set SP via LXI SP,<safe> only if you understand your TPA"
   printing:
-    bdos_functions:
-      2: "CONOUT — E=char"
-      6: "Direct console I/O — E=FFh for status/peek (see quirks)"
-      9: "Print '$'-terminated string — DE points at string"
-      11: "Console status — A=FFh if key ready, else 00h (see quirks)"
-      15: "Open FCB"
-      16: "Close FCB"
-      19: "Delete FCB"
-      20: "Read sequential"
-      21: "Write sequential"
-      22: "Make FCB"
-      26: "Set DMA (DE=addr)"
+  bdos_functions:
+    0:  "System reset (warm boot) — no params; no return"
+    1:  "Console input — returns A=char (echoed)"
+    2:  "Console output — E=char"
+    3:  "Reader input — returns A=char (RDR:)"
+    4:  "Punch output — E=char (PUN:)"
+    5:  "List output — E=char (LST:)"
+    6:  "Direct console I/O — E=FFh: non-blocking peek (A=char or 00h if none); else E=char outputs"
+    7:  "Get I/O byte — returns A=IOBYTE"
+    8:  "Set I/O byte — E=IOBYTE"
+    9:  "Print '$'-terminated string — DE=addr"
+    10: "Read console buffer — DE=buf; buf[0]=max, on return buf[1]=len, text at buf+2"
+    11: "Console status — A=FFh if key ready, else 00h"
+    12: "Return version — HL=version (L=22h on CP/M 2.2)"
+    13: "Reset disk system — relog disks/close files"
+    14: "Select disk — E=drive (0=A:..15=P:)"
+    15: "Open FCB — DE=.FCB; A=dir code"
+    16: "Close FCB — DE=.FCB; A=dir code"
+    17: "Search first — DE=.FCB; A=dir code"
+    18: "Search next — A=dir code"
+    19: "Delete file — DE=.FCB; A=dir code"
+    20: "Read sequential — DE=.FCB; A=status"
+    21: "Write sequential — DE=.FCB; A=status"
+    22: "Make file — DE=.FCB; A=dir code"
+    23: "Rename file — DE=.FCB; A=dir code"
+    24: "Return login vector — HL=bitmask of logged-in drives"
+    25: "Return current disk — A=drive (0=A:)"
+    26: "Set DMA address — DE=addr"
+    27: "Get allocation vector address — HL=.ALV (current drive)"
+    28: "Write-protect current disk — no params"
+    29: "Get read-only vector — HL=bitmask"
+    30: "Set file attributes — DE=.FCB; A=dir code"
+    31: "Get DPB address — HL=.DPB (current drive)"
+    32: "Get/Set user number — E=FFh→A=current; else E=0..15 to set"
+    33: "Read random — DE=.FCB; A=status (uses FCB r0..r2)"
+    34: "Write random — DE=.FCB; A=status (uses FCB r0..r2)"
+    35: "Compute file size — DE=.FCB; updates FCB r0..r2"
+    36: "Set random record — DE=.FCB; set r0..r2 from seq position"
+    37: "Reset drive(s) — DE=drive bitmask; A=err"
+    40: "Write random with zero fill — DE=.FCB; A=status"
   strings:
     dollar_terminated: "Use for BDOS 9: e.g., DB 'Hello','$'"
     zero_terminated: "For internal helper loops"
+
 
 protocols:
   raw_mirror:
@@ -284,7 +313,7 @@ templates:
         ; make
         LXI D,FCBLOC
         MVI C,22
-        CALL BDOS
+        CALL 
         ; fill 1 KB buffer
         LXI H,DMABUF
         MVI A,055H
@@ -298,18 +327,18 @@ templates:
         ; set DMA
         LXI D,DMABUF
         MVI C,26
-        CALL BDOS
+        CALL 
         ; write 8 records (8*128=1024)
         LXI D,FCBLOC
         MVI B,08H
     WLP:  MVI C,21
-        CALL BDOS
+        CALL 
         DCR B
         JNZ WLP
         ; close
         LXI D,FCBLOC
         MVI C,16
-        CALL BDOS
+        CALL 
         RET
     ; --- data ---
     FCBLOC:
@@ -336,7 +365,7 @@ templates:
     660 IF LS=0 THEN RB=S AND 127: RA=1: LS=128: RETURN
     670 RA=0: RETURN
 
-  # --- NEW: rock-solid decimal print helpers (BDOS 9, fixed /10) ---
+  # --- NEW: rock-solid decimal print helpers ( 9, fixed /10) ---
   u32_decimal_print_bdos9: |
     ; ---------- Decimal print of u32 at PTR32 via BDOS 9 ----------
     ; Builds digits right-justified in OUTBUF and prints once.
@@ -760,3 +789,4 @@ known_quirks_and_tips:
   - "For CP/M sequential I/O, always `SET DMA` (BDOS 26) before each read/write block."
   - "When using the strobe, keep data stable while D7 is high; drop strobe only after the peer can sample."
   - "Avoid delays inside the RX edge path; TX may shape strobe with tiny delays if needed."
+
