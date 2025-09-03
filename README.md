@@ -1,6 +1,7 @@
 # Z80/Z180 Projects — SC7xx (CP/M & RomWBW)
+# (e.g., SC722, SC719, SC131, SC126, SC794)
 
-A curated collection of **Z80/Z180** programs, demos, and utilities targeting the **Small Computer Central SC7xx** ecosystem (e.g., SC722, SC719, SC131, SC794) running **RomWBW CP/M 2.2** and compatibles.
+A curated collection of **Z80/Z180** programs, demos, and utilities targeting the **Small Computer Central SC7xx** ecosystem (e.g., SC722, SC719, SC131, SC126, SC794) running **RomWBW CP/M 2.2** and compatibles.
 
 > This repository grows over time. Each subfolder includes its own README with build/run notes and any board-specific jumpers or port mappings.
 
