@@ -1,0 +1,500 @@
+; ============================================================================
+; PRIMEGEN.ASM — 8080 / CP/M
+; Prints primes forever (numbers only). Stop with ^C.
+; Trial division by odd D; stop testing when D*D > N.
+; Each prime printed with one BDOS 9 call (string at DE, '$' terminated).
+; ============================================================================
+BDOS    EQU     0005H
+
+            ORG     0100H
+
+; ------------------------
+; ENTRY
+; ------------------------
+START:
+            LXI     D, TITLE
+            MVI     C, 9
+            CALL    BDOS
+
+            ; N = 2, print it
+            MVI     A, 2
+            STA     N0
+            XRA     A
+            STA     N1
+            STA     N2
+            STA     N3
+
+            LXI     H, N0
+            SHLD    PTR32
+            CALL    U32_PRINT_PTR_BDOS9
+            LXI     D, NL
+            MVI     C, 9
+            CALL    BDOS
+
+            ; N = 3 (start odd sequence)
+            MVI     A, 3
+            STA     N0
+            XRA     A
+            STA     N1
+            STA     N2
+            STA     N3
+
+; ------------------------
+; MAIN LOOP  (no key checks; use ^C to stop)
+; ------------------------
+MAIN_LOOP:
+            ; Trial divisors start at 3
+            MVI     D, 0
+            MVI     E, 3          ; DE = 3
+
+DIV_LOOP:
+            ; If (D*D) > N ⇒ N is prime
+            PUSH    D
+            PUSH    B
+            PUSH    H
+            CALL    SQR16_T       ; T = DE * DE
+            CALL    T_CMP_N       ; CY=1 if T<N, Z=1 if T==N, else T>N
+            POP     H
+            POP     B
+            POP     D
+            JC      TRY_DIV       ; T <= N ? keep testing divisors
+            JZ      TRY_DIV
+
+            ; prime: print N
+            LXI     H, N0
+            SHLD    PTR32
+            CALL    U32_PRINT_PTR_BDOS9
+            LXI     D, NL
+            MVI     C, 9
+            CALL    BDOS
+            JMP     NEXT_N
+
+TRY_DIV:    ; If N % D == 0 ⇒ composite
+            PUSH    D
+            CALL    U32_MOD_DE    ; remainder in HL
+            MOV     A, H
+            ORA     L
+            POP     D
+            JZ      NEXT_N        ; composite ⇒ advance N
+
+            ; D += 2 (odd divisors only)
+            MVI     A, 2
+            ADD     E
+            MOV     E, A
+            JNC     DIV_LOOP
+            INR     D
+            JMP     DIV_LOOP
+
+NEXT_N:     ; N += 2 (skip evens)
+            MVI     A, 2
+            CALL    ADD_N_U8
+            JMP     MAIN_LOOP
+
+; ------------------------
+; CLEAN EXIT (unused; ^C terminates)
+; ------------------------
+CLEAN_EXIT:
+            RET
+
+; ============================================================================
+; UTILITIES
+; ============================================================================
+
+; Add 8-bit A to 32-bit N (N0..N3)
+ADD_N_U8:
+            MOV     E, A
+            LDA     N0
+            ADD     E
+            STA     N0
+            LDA     N1
+            ACI     0
+            STA     N1
+            LDA     N2
+            ACI     0
+            STA     N2
+            LDA     N3
+            ACI     0
+            STA     N3
+            RET
+
+; ------------------------
+; Decimal print of u32 at PTR32 (single BDOS 9 call)
+;   - Builds digits into OUTBUF[..OUTEND-1], puts '$' at OUTEND
+;   - Calls BDOS 9 once with DE = start of digits
+; ------------------------
+U32_PRINT_PTR_BDOS9:
+            ; Copy source (4 bytes) into NW0..NW3
+            LHLD    PTR32
+            MOV     A, M
+            STA     NW0
+            INX     H
+            MOV     A, M
+            STA     NW1
+            INX     H
+            MOV     A, M
+            STA     NW2
+            INX     H
+            MOV     A, M
+            STA     NW3
+
+            ; If zero -> print "0$"
+            LDA     NW3
+            MOV     B, A
+            LDA     NW2
+            ORA     B
+            MOV     B, A
+            LDA     NW1
+            ORA     B
+            MOV     B, A
+            LDA     NW0
+            ORA     B
+            MOV     A, B
+            JNZ     U32P_CONT9
+
+            MVI     A, '0'
+            STA     OUTBUF+0
+            MVI     A, '$'
+            STA     OUTBUF+1
+            LXI     D, OUTBUF
+            MVI     C, 9
+            CALL    BDOS
+            RET
+
+U32P_CONT9:
+            ; Prepare buffer tail and write terminator
+            LXI     H, OUTEND
+            SHLD    OUTPTR
+            MVI     A, '$'
+            STA     OUTEND
+
+U32P_LOOP9:
+            CALL    DIV32_10      ; NW /= 10, remainder -> B
+
+            ; store digit at [--OUTPTR]
+            LHLD    OUTPTR
+            DCX     H
+            MOV     A, B
+            ADI     '0'
+            MOV     M, A
+            SHLD    OUTPTR
+
+            ; if NW != 0 keep collecting
+            LDA     NW3
+            MOV     B, A
+            LDA     NW2
+            ORA     B
+            MOV     B, A
+            LDA     NW1
+            ORA     B
+            MOV     B, A
+            LDA     NW0
+            ORA     B
+            MOV     A, B
+            JNZ     U32P_LOOP9
+
+            ; Print from OUTPTR to '$' with one BDOS 9 call
+            LHLD    OUTPTR
+            XCHG                    ; DE = start
+            MVI     C, 9
+            CALL    BDOS
+            RET
+
+; Divide NW(32-bit) by 10.
+; Returns: quotient in NW0..NW3, remainder (0..9) in B.
+DIV32_10:
+            MVI     B, 0
+            LDA     NW3
+            CALL    DIV10_STEP
+            STA     NW3
+            LDA     NW2
+            CALL    DIV10_STEP
+            STA     NW2
+            LDA     NW1
+            CALL    DIV10_STEP
+            STA     NW1
+            LDA     NW0
+            CALL    DIV10_STEP
+            STA     NW0
+            RET
+
+; --- FIXED 16-bit /10 for one byte carry-in ---
+; In:  A = low byte, B = remainder_in (0..9)
+; Out: A = quotient_byte, B = remainder_out (0..9)
+; Uses: C,D,E,B,A (clobbered)
+DIV10_STEP:
+            MOV     C, A          ; X low
+            MOV     A, B
+            MOV     D, A          ; X high  (B→D)
+            XRA     A
+            MOV     E, A          ; Q = 0
+
+; while X >= 160:  X -= 160; Q += 16
+D10_160CHK:
+            MOV     A, D
+            CPI     0
+            JNZ     D10_160SUB        ; if high>0, definitely ≥160
+            MOV     A, C
+            CPI     0A0H
+            JC      D10_10CHK         ; low<160 and high==0 → skip
+D10_160SUB:
+            ; X -= 160 (proper 16-bit subtract with borrow)
+            MOV     A, C
+            SUI     0A0H
+            MOV     C, A
+            MOV     A, D
+            MVI     B, 0
+            SBB     B                 ; D = D - borrow
+            MOV     D, A
+            ; Q += 16
+            MOV     A, E
+            ADI     16
+            MOV     E, A
+            JMP     D10_160CHK
+
+; while X >= 10:   X -= 10; Q += 1
+D10_10CHK:
+            MOV     A, D
+            CPI     0
+            JNZ     D10_10SUB         ; high>0 → ≥10
+            MOV     A, C
+            CPI     10
+            JC      D10_DONE
+D10_10SUB:
+            MOV     A, C
+            SUI     10
+            MOV     C, A
+            MOV     A, D
+            MVI     B, 0
+            SBB     B                 ; subtract borrow
+            MOV     D, A
+            INR     E
+            JMP     D10_10CHK
+
+D10_DONE:
+            MOV     A, E              ; quotient byte
+            MOV     B, C              ; remainder (0..9)
+            RET
+
+; ------------------------
+; u32 % u16 : remainder in HL
+; Input: N3..N0 (u32), DE = divisor (u16)
+U32_MOD_DE:
+            XRA     A
+            MOV     H, A
+            MOV     L, A
+            LDA     N3
+            CALL    MOD_STEP
+            LDA     N2
+            CALL    MOD_STEP
+            LDA     N1
+            CALL    MOD_STEP
+            LDA     N0
+            CALL    MOD_STEP
+            RET
+
+; MOD_STEP: byte in A, divisor DE, remainder HL
+MOD_STEP:
+            MOV     H, L          ; r<<8
+            MOV     L, A          ; + b
+MSL:        MOV     A, H
+            CMP     D
+            JC      MSD
+            JNZ     MSS
+            MOV     A, L
+            CMP     E
+            JC      MSD
+MSS:        MOV     A, L          ; r -= DE
+            SUB     E
+            MOV     L, A
+            MOV     A, H
+            SBB     D
+            MOV     H, A
+            JMP     MSL
+MSD:        RET
+
+; (DE*DE) -> T0..T3 (32-bit), destroys DE
+SQR16_T:
+            XRA     A
+            STA     T0
+            STA     T1
+            STA     T2
+            STA     T3
+            MOV     A, E
+            STA     M0
+            MOV     A, D
+            STA     M1
+            XRA     A
+            STA     M2
+            STA     M3
+            MVI     C, 16
+SQ1:        MOV     A, E
+            ANI     1
+            JZ      SQ2
+            CALL    T_ADD_M
+SQ2:        MOV     A, D
+            RAR
+            MOV     D, A
+            MOV     A, E
+            RAR
+            MOV     E, A
+            STC
+            CMC
+            LDA     M0
+            RAL
+            STA     M0
+            LDA     M1
+            RAL
+            STA     M1
+            LDA     M2
+            RAL
+            STA     M2
+            LDA     M3
+            RAL
+            STA     M3
+            DCR     C
+            JNZ     SQ1
+            RET
+
+; T += M (32-bit)
+T_ADD_M:
+            LDA     T0
+            MOV     B, A
+            LDA     M0
+            ADD     B
+            STA     T0
+            LDA     T1
+            MOV     B, A
+            LDA     M1
+            ADC     B
+            STA     T1
+            LDA     T2
+            MOV     B, A
+            LDA     M2
+            ADC     B
+            STA     T2
+            LDA     T3
+            MOV     B, A
+            LDA     M3
+            ADC     B
+            STA     T3
+            RET
+
+; Compare T (u32) with N (u32): CY=1 if T<N, Z=1 if equal, else T>N
+T_CMP_N:
+            LDA     N3
+            MOV     B, A
+            LDA     T3
+            CMP     B
+            JC      TLT
+            JZ      TEQ3
+            JMP     TGT
+TEQ3:       LDA     N2
+            MOV     B, A
+            LDA     T2
+            CMP     B
+            JC      TLT
+            JZ      TEQ2
+            JMP     TGT
+TEQ2:       LDA     N1
+            MOV     B, A
+            LDA     T1
+            CMP     B
+            JC      TLT
+            JZ      TEQ1
+            JMP     TGT
+TEQ1:       LDA     N0
+            MOV     B, A
+            LDA     T0
+            CMP     B
+            JC      TLT
+            JZ      TEQ0
+            JMP     TGT
+TEQ0:       XRA     A
+            RET
+TLT:        STC
+            RET
+TGT:        STC
+            CMC
+            ORA     A
+            RET
+
+; ============================================================================
+; DATA
+; ============================================================================
+TITLE:      DB 'Prime generator. (^C to stop)',13,10,'$'
+NL:         DB 13,10,'$'
+
+; Current candidate N (u32, little endian)
+N0:         DB 0
+N1:         DB 0
+N2:         DB 0
+N3:         DB 0
+
+; Decimal conversion workspace
+NW0:        DB 0
+NW1:        DB 0
+NW2:        DB 0
+NW3:        DB 0
+OUTBUF:     DS 16                 ; up to 10 digits + '$'
+OUTEND      EQU OUTBUF+15         ; '$' lives here
+OUTPTR:     DW 0
+PTR32:      DW 0
+
+; Square / compare workspace
+T0:         DB 0
+T1:         DB 0
+T2:         DB 0
+T3:         DB 0
+M0:         DB 0
+M1:         DB 0
+M2:         DB 0
+M3:         DB 0
+
+
+*****************************************************************************************
+
+:10010000117A030E09CD05003E02329D03AF329EE7
+:1001100003329F0332A003219D0322B703CDA00128
+:10012000119A030E09CD05003E03329D03AF329EA6
+:1001300003329F0332A00316001E03D5C5E5CDB1DF
+:1001400002CD2E03E1C1D1DA6101CA6101219D0313
+:1001500022B703CDA001119A030E09CD0500C37685
+:1001600001D5CD7C027CB5D1CA76013E02835FD237
+:100170003B0114C33B013E02CD7F01C33701C95F80
+:100180003A9D0383329D033A9E03CE00329E033A8A
+:100190009F03CE00329F033AA003CE0032A003C9D2
+:1001A0002AB7037E32A103237E32A203237E32A329
+:1001B00003237E32A4033AA403473AA303B0473A89
+:1001C000A203B0473AA103B078C2DF013E3032A5A6
+:1001D000033E2432A60311A5030E09CD0500C92153
+:1001E000B40322B5033E2432B403CD18022AB5036A
+:1001F0002B78C6307722B5033AA403473AA303B05D
+:10020000473AA203B0473AA103B078C2EA012AB53F
+:1002100003EB0E09CD0500C906003AA403CD3F0249
+:1002200032A4033AA303CD3F0232A3033AA203CD83
+:100230003F0232A2033AA103CD3F0232A103C94FCC
+:100240007857AF5F7AFE00C2500279FEA0DA6002F2
+:1002500079D6A04F7A060098577BC6105FC3440238
+:100260007AFE00C26C0279FE0ADA790279D60A4F68
+:100270007A060098571CC360027B41C9AF676F3A8A
+:10028000A003CD98023A9F03CD98023A9E03CD98E1
+:10029000023A9D03CD9802C9656F7CBADAB002C2FA
+:1002A000A7027DBBDAB0027D936F7C9A67C39A0286
+:1002B000C9AF32B90332BA0332BB0332BC037B325B
+:1002C000BD037A32BE03AF32BF0332C0030E107BD0
+:1002D000E601CAD802CD01037A1F577B1F5F373F63
+:1002E0003ABD031732BD033ABE031732BE033ABF0D
+:1002F000031732BF033AC0031732C0030DC2CF0247
+:10030000C93AB903473ABD038032B9033ABA034741
+:100310003ABE038832BA033ABB03473ABF03883276
+:10032000BB033ABC03473AC0038832BC03C93AA0B6
+:1003300003473ABC03B8DA7403CA3F03C376033AEF
+:100340009F03473ABB03B8DA7403CA5003C376036A
+:100350003A9E03473ABA03B8DA7403CA6103C37614
+:10036000033A9D03473AB903B8DA7403CA7203C368
+:100370007603AFC937C9373FB7C95072696D652079
+:1003800067656E657261746F722E20285E432074FB
+:100390006F2073746F70290D0A240D0A2400000069
+:0503A000000000000058
+:0C03B5000000000000000000000000003C
+:00000001FF
