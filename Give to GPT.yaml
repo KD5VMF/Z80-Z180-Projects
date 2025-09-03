@@ -1,137 +1,177 @@
-# SC700/SC126 + SC719 8080 Assembly Profile
+# SC700/SC126 + RomWBW 8080 Assembly Profile
 # Version: 1.1
 # Last-Updated: 2025-09-03
-# Author: GPT-5 Thinking
 # Purpose: Hand this file back to ChatGPT later — it encodes everything needed
-#          to generate *correct 8080 code* for your Small Computer Central rigs
-#          (SC700 series, SC126 Z180) with SC719 Digital I/O and RomWBW HBIOS.
+#          to generate *correct 8080 code* for your SC700-series & SC126 rigs
+#          (RomWBW CP/M 2.2; ASM.COM 8080 mnemonics; strict 8080 only)
 
 meta:
   systems:
-    - SC700 series (various, Z80-class; use 8080-compatible mnemonics)
-    - SC126 Z180 (runs 8080/Z80 code; we target 8080-strict for portability)
-  os: CP/M 2.2 (RomWBW distribution)
-  bios: RomWBW HBIOS
-  assembler: ASM.COM (Digital Research) — 8080 mnemonics only
-  basic: MBASIC (Microsoft BASIC-80)
+    - "SC700 series (RCBus family; Z80-class; target 8080 mnemonics for portability)"
+    - "SC126 Z180 motherboard (runs 8080/Z80 code; we emit 8080-only)"
+  os: "CP/M 2.2 (RomWBW distribution)"
+  bios: "RomWBW HBIOS (proxy at RST 1 = 0008h)"
+  assembler: "ASM.COM (Digital Research) — 8080 mnemonics only"
   com_programs:
-    origin: ORG 0100H
-    return: RET (or warm boot via system reset); no implicit exit function
-  comments: "ASM.COM uses ';' for comments. Hex constants like 0FFH (leading 0 for A–F). Strings in single quotes."
-  build_recipes:
-    asm_com:
-      - "A> ASM FILENAME.ASM"
-      - "A> LOAD FILENAME"
-      - "A> REN FILENAME.COM=FILENAME.HEX   (optional if using LOAD; some setups auto-produce .COM)"
-    alt_m80_l80:
-      - "A> M80 =FILENAME.ASM"
-      - "A> L80 FILENAME/N/E/X"
+    origin: "ORG 0100H"
+    return: "RET (warm boot via CCP; no implicit exit call)"
+  label_style:
+    asmcom_gotcha: "Avoid underscores in labels (some ASM.COM configs misread them); use A-Z0-9 only."
+  strings:
+    dollar_terminated: "For BDOS 9 (print): DB 'Hello','$'"
+    zero_terminated: "For internal helper loops only (not BDOS 9)"
+  build:
+    assemble: "ASM FILENAME.ASM"
+    linkload: "LOAD FILENAME"
+    run: "FILENAME"
+
+tooling:
+  bdos_call:
+    entry: "CALL 0005H"
+    regs_in: "C=function, DE=param (address or value) when applicable"
+    regs_out: "A or HL depending on function (classic CP/M 2.2 rules)"
+  hbios_call:
+    entry: "RST 1 (0008h)"
+    regs_in: "B=function, C=sub/Unit (often), HL=buffer, DE=extra args as needed"
+    status: "A=0 success; nonzero = error"
+    note: "Some services require buffers in the upper 32K; see RomWBW docs."
 
 hardware:
   clocks:
-    SC126_Z180: "typ ~18.432 MHz (exact speed only matters for delays)"
-    SC700_generic: "varies; avoid cycle-count assumptions when possible"
+    SC126_Z180: "typ ~18.432 MHz (some builds double via Z180; treat delays as approximate)"
+    SC700_generic: "varies; do not hardcode cycle counts unless calibrated locally"
   memory:
-    TPA: "Transient Program Area from 0100H up to BDOS/CCP; avoid using fixed high addresses."
-  rtc:
-    module: SC727 DS1302 (RomWBW DSRTC)
-    hbios_call: "RTCGETTIM via HBIOS vector RST 1"
-    call:
-      entry: "RST 1"
-      B: 0x20  # function id
-      HL: "buffer (6 bytes)"
-      returns: "YY,MM,DD,HH,MM,SS (BCD) in buffer; A=status (00=OK)"
-  dio:
-    module: SC719 Digital I/O
-    base_io_default:
-      hex: 0x30
-      dec: 48
-      note: "Set by JP1 on SC719. Both ends must match."
-    lines:
-      D0-D7: "8-bit parallel data. We commonly use D7 as strobe in protocols; raw mirroring uses all 8 bits."
+    TPA: "0100H up to CCP/BDOS; avoid fixed high addresses unless you own them"
+  sc126_led_latch:
+    port: 0x0D
+    desc: "SC126 user LEDs via system latch (seconds/diagnostics mirror)"
+  sc719_dio:
+    typical_base:
+      - 0x00    # many SCC docs default JP1 open = 00h
+      - 0x30    # some builds select 30h (48) — verify JP1
+    lines: "D0..D7 on a single port; OUT writes LEDs, IN reads inputs"
     polarity:
-      default: active-high
-      invert_by:
-        asm: "IN_INV/OUT_INV EQU 0FFH"
-        basic: "IV=255"
-  serial:
-    romwbw_devices: ["UR1:", "UR2:", "TTY:", "AUX:", "PUN:", "RDR:", "LST:"]
-    examples:
-      mode: "MODE COM1: 115200,N,8,1"
-      map_reader_punch: ["STAT RDR:=UR2:", "STAT PUN:=UR2:"]
+      default: "active-high"
+      invert_hint: "If LEDs look inverted, XOR 0xFF in software"
+
+io_maps:
+  probable:
+    CF_registers: "0x10..0x17"
+    Z80_PIO: "0x68..0x6B"
+    Z80_SIO2: "0x80..0x83"
+    Z80_CTC: "0x88..0x8B"
+    RTC_gate: "0x0C (Z180 builds) / 0xC0 (Z80 builds) — but normally use HBIOS"
+  sc126_z180_onboard:
+    system_latch: "0x0C"
+    led_data: "0x0D"
+    z180_regs: "0xC0..0xFF (ASCI/MMU/timers)"
 
 coding_conventions:
-  target_isa: "8080 strict (no Z80-only ops like EXX, LD (HL),n, etc.)"
-  safe_ops: ["IN/OUT", "RST 1", "PUSH/POP", "DAD H/BC/DE/SP only", "XRA A (clear A)", "XRI imm (8080 okay)", "RAL/RAR", "RLC/RRC"]
+  target_isa: "8080 strict (no Z80-only ops, no IX/IY, no ED/CB prefixed)"
+  safe_ops: ["IN/OUT", "RST 1", "PUSH/POP", "DAD (BC/DE/HL/SP only)", "XRA A", "RAL/RAR", "RLC/RRC"]
   avoid:
-    - "DAD with single registers (illegal)"
-    - "Z80 bit/ix/iy instructions"
-    - "Assuming stack top; if needed, set SP via LXI SP,<safe> only if you understand your TPA"
-    
-  printing:
-  bdos_functions:
-    0:  "System reset (warm boot) — no params; no return"
-    1:  "Console input — returns A=char (echoed)"
-    2:  "Console output — E=char"
-    3:  "Reader input — returns A=char (RDR:)"
-    4:  "Punch output — E=char (PUN:)"
-    5:  "List output — E=char (LST:)"
-    6:  "Direct console I/O — E=FFh: non-blocking peek (A=char or 00h if none); else E=char outputs"
-    7:  "Get I/O byte — returns A=IOBYTE"
-    8:  "Set I/O byte — E=IOBYTE"
-    9:  "Print '$'-terminated string — DE=addr"
-    10: "Read console buffer — DE=buf; buf[0]=max, on return buf[1]=len, text at buf+2"
-    11: "Console status — A=FFh if key ready, else 00h"
-    12: "Return version — HL=version (L=22h on CP/M 2.2)"
-    13: "Reset disk system — relog disks/close files"
-    14: "Select disk — E=drive (0=A:..15=P:)"
-    15: "Open FCB — DE=.FCB; A=dir code"
-    16: "Close FCB — DE=.FCB; A=dir code"
-    17: "Search first — DE=.FCB; A=dir code"
-    18: "Search next — A=dir code"
-    19: "Delete file — DE=.FCB; A=dir code"
-    20: "Read sequential — DE=.FCB; A=status"
-    21: "Write sequential — DE=.FCB; A=status"
-    22: "Make file — DE=.FCB; A=dir code"
-    23: "Rename file — DE=.FCB; A=dir code"
-    24: "Return login vector — HL=bitmask of logged-in drives"
-    25: "Return current disk — A=drive (0=A:)"
-    26: "Set DMA address — DE=addr"
-    27: "Get allocation vector address — HL=.ALV (current drive)"
-    28: "Write-protect current disk — no params"
-    29: "Get read-only vector — HL=bitmask"
-    30: "Set file attributes — DE=.FCB; A=dir code"
-    31: "Get DPB address — HL=.DPB (current drive)"
-    32: "Get/Set user number — E=FFh→A=current; else E=0..15 to set"
-    33: "Read random — DE=.FCB; A=status (uses FCB r0..r2)"
-    34: "Write random — DE=.FCB; A=status (uses FCB r0..r2)"
-    35: "Compute file size — DE=.FCB; updates FCB r0..r2"
-    36: "Set random record — DE=.FCB; set r0..r2 from seq position"
-    37: "Reset drive(s) — DE=drive bitmask; A=err"
-    40: "Write random with zero fill — DE=.FCB; A=status"
-  strings:
-    dollar_terminated: "Use for BDOS 9: e.g., DB 'Hello','$'"
-    zero_terminated: "For internal helper loops"
+    - "DCX/INX on illegal pseudo-regs (e.g., DCX DE is illegal in 8080 syntax)"
+    - "EXX, DJNZ, BIT/SET/RES, LD (HL),n — Z80-only"
+  asmcom_tips:
+    hex_constants: "Use trailing H and leading 0 when A..F (e.g., 0A0H)"
+    labels: "Prefer A-Z0-9, no underscores to dodge rare parser quirks"
+  console:
+    print_char: "BDOS 2 (E=char)"
+    print_string: "BDOS 9 (DE->$ string)"
+    console_in: "BDOS 1 (blocking; returns A=char)"
+    nonblocking_key: "BDOS 6 with E=0FFh → A=char or 00h"
+  files_dma:
+    set_dma: "BDOS 26 (DE=buffer) before sequential/random read/write"
+    fcb: "Standard CP/M FCB layout; r0..r2 used for random I/O"
 
+bdos_functions:  # CP/M 2.2 complete set your rig uses
+  0:  "System reset (warm boot) — no params"
+  1:  "Console input — returns A=char (echoed)"
+  2:  "Console output — E=char"
+  3:  "Reader input — A=char (RDR:)"
+  4:  "Punch output — E=char (PUN:)"
+  5:  "List output — E=char (LST:)"
+  6:  "Direct console I/O — E=FFh: peek (A=char or 00h); else E=char outputs"
+  7:  "Get I/O byte — A=IOBYTE"
+  8:  "Set I/O byte — E=IOBYTE"
+  9:  "Print $-terminated string — DE=addr"
+  10: "Read console buffer — DE=buf; buf[0]=max → buf[1]=len, text at buf+2"
+  11: "Console status — A=FFh if key ready, else 00h"
+  12: "Return version — HL=version (L=22h on CP/M 2.2)"
+  13: "Reset disk system — relog/close"
+  14: "Select disk — E=drive (0=A:)"
+  15: "Open file — DE=FCB; A=dir code/status"
+  16: "Close file — DE=FCB; A=dir code/status"
+  17: "Search first — DE=FCB; A=dir code/status"
+  18: "Search next — A=dir code/status"
+  19: "Delete file — DE=FCB; A=dir code/status"
+  20: "Read sequential — DE=FCB; A=status"
+  21: "Write sequential — DE=FCB; A=status"
+  22: "Make file — DE=FCB; A=dir code/status"
+  23: "Rename file — DE=FCB; A=dir code/status"
+  24: "Get login vector — HL=drive bitmask"
+  25: "Get current disk — A=drive (0=A:)"
+  26: "Set DMA address — DE=addr"
+  27: "Get allocation vector — HL=ALV* (current drive)"
+  28: "Write-protect current disk — no params"
+  29: "Get read-only vector — HL=bitmask"
+  30: "Set file attributes — DE=FCB; A=dir code/status"
+  31: "Get DPB address — HL=DPB* (current drive)"
+  32: "Get/Set user number — E=FFh→A=current; else E=0..15 to set"
+  33: "Read random — DE=FCB; A=status (uses r0..r2)"
+  34: "Write random — DE=FCB; A=status (uses r0..r2)"
+  35: "Compute file size — DE=FCB; updates r0..r2"
+  36: "Set random record — DE=FCB; set r0..r2 from sequential pos"
+  37: "Reset drive(s) — DE=bitmask; A=err"
+  40: "Write random with zero fill — DE=FCB; A=status"
+  notes: "*27/31 return driver-owned structures; treat as read-only."
 
-protocols:
-  raw_mirror:
-    desc: "OUT <= (IN ^ IN_INV) ^ OUT_INV (all 8 bits)"
-    usage: "One side only to avoid feedback; fastest possible echo."
-  strobe_7bit:
-    desc: "D0..D6 = data, D7 = strobe. Rising edge = valid, peer mirrors and strobes back."
-    rx_rule: "Latch data on D7 rising edge; ignore when stable-high; detect falling to arm next byte."
-    tx_rule: "Drive data, optional pre-delay, raise D7, hold width, drop D7; keep data stable."
-    timings:
-      pre: 1
-      high: 8
-      post: 1
-    tweak: "Increase if the other side misses pulses."
-  ascii_line:
-    desc: "Send ASCII bytes using strobe_7bit; end line with LF (10). CR (13) is ignored."
-    example:
-      foreman_to_worker: "CHK <hex>\\n"
-      worker_reply: "OK <hex> <0|1>\\n"
+hbios_services:  # RomWBW high-level, enough for coding
+  call:
+    entry: "RST 1 (0008h)"
+    B: "function code"
+    C: "unit/subfunction (e.g., 0x80 = current console)"
+    HL: "buffer pointer (when required)"
+    DE: "extra params as defined by service"
+    return_A: "0 = success; !0 = error"
+  CIO:  # Character I/O
+    00h: "CIOIN  — C=unit → A=status, E=char (blocking)"
+    01h: "CIOOUT — C=unit, E=char → A=status"
+    02h: "CIOIST — C=unit → A=bytes available"
+    03h: "CIOOST — C=unit → A=space available"
+    04h: "CIOINIT — C=unit, DE=lineword → A=status"
+    05h: "CIOQUERY — C=unit → A=status, DE=lineword"
+  DIO:  # Disk I/O (buffers in upper 32K)
+    10h: "STATUS"
+    11h: "RESET — C=unit"
+    12h: "SEEK — CHS or LBA depending on driver"
+    13h: "READ — C=unit, E=blocks, HL=buffer"
+    14h: "WRITE — C=unit, E=blocks, HL=buffer"
+    1Ah: "CAPACITY — C=unit, HL=buf → DE:HL=blocks, BC=blk size"
+  RTC:
+    20h: "RTCGETTIM — HL=6-byte BCD buf [YY,MM,DD,HH,MM,SS]"
+    21h: "RTCSETTIM — HL=6-byte BCD buf"
+    24h: "RTCGETBLK — HL=buffer (upper 32K)"
+    25h: "RTCSETBLK — HL=buffer (upper 32K)"
+  SYS:
+    F0h: "RESET"
+    F1h: "VER — version into registers (maj/min/build)"
+    F8h: "GET — subfunctions: TIMER/SECONDS/DEVICE COUNTS/etc."
+
+serial_and_console:
+  romwbw_devices: ["CON:", "TTY:", "UR1:", "UR2:", "AUX:", "PUN:", "RDR:", "LST:"]
+  mode_examples:
+    - "MODE COM1: 115200,N,8,1"
+  nonblocking_key:
+    bdos6_ff: "E=FFh, C=6 → A=char or 00h if none"
+
+ansi_strings:  # ready for BDOS 9
+  CLEAR:  "\u001B[2J$"
+  HOME:   "\u001B[H$"
+  HIDE:   "\u001B[?25l$"
+  SHOW:   "\u001B[?25h$"
+  GREEN:  "\u001B[1;32m$"
+  RESET:  "\u001B[0m$"
 
 templates:
   skeleton_com_asm: |
@@ -142,653 +182,104 @@ templates:
         RET
     END START
 
-  bdos_equates: |
-    ; ---------- BDOS equates ----------
-    BDOS    EQU 0005H
-    C_CONOUT    EQU 2
-    C_DIRECT    EQU 6
-    C_STAT      EQU 11
-    C_PRINT     EQU 9
-
-  sc719_hal_equ: |
-    ; ---------- SC719 HAL equates ----------
-    DIO_PORT    EQU 030H   ; base I/O (0x30 / 48)
-    IN_INV      EQU 000H   ; set 0FFH if inputs are inverted
-    OUT_INV     EQU 000H   ; set 0FFH if outputs (LEDs) are active-low
-
-  sc719_raw_mirror: |
-    ; ---------- RAW MIRROR (all 8 bits) ----------
+  print_line_bdos9: |
+    ; Print $-string at DX/DE
+    BDOS EQU 0005H
     ORG 0100H
-    DIO_PORT    EQU 030H
-    IN_INV      EQU 000H
-    OUT_INV     EQU 000H
-    START:
-        IN  DIO_PORT
-        XRI IN_INV
-        XRI OUT_INV
-        OUT DIO_PORT
-    LOOP:
-        IN  DIO_PORT
-        XRI IN_INV
-        XRI OUT_INV
-        OUT DIO_PORT
-        JMP LOOP
-    END START
+    LXI D,MSG
+    MVI C,9
+    CALL BDOS
+    RET
+    MSG: DB 'Hello from 8080!','$'
+    END
 
-  sc719_txrx_strobe: |
-    ; ---------- STROBE TX/RX (D7=strobe, D0..D6=data) ----------
-    ; Equates:
-    ;   DIO_PORT EQU 030H
-    ;   IN_INV/OUT_INV EQU 00H or 0FFH
-    ;   DLY_PRE EQU 01H, DLY_STB EQU 08H, DLY_POST EQU 01H
-    ;
-    ; RX_BYTE: A <- byte (0..127) on rising edge; A=0FFh if none.
-    PREV    DB 00H
-    RX_BYTE:
-        IN  DIO_PORT
-        XRI IN_INV
-        MOV D,A
-        ANI 080H
-        MOV E,A
-        LDA PREV
-        ORA A
-        JNZ RB_HI
-        MOV A,E
-        ORA A
-        JZ  RB_NONE
-        MOV A,D
-        ANI 07FH
-        MVI D,080H
-        STA PREV
-        RET
-    RB_HI:
-        MOV A,E
-        ORA A
-        JZ  RB_SET0
-        MVI A,080H
-        STA PREV
-        JMP RB_NONE
-    RB_SET0:
-        XRA A
-        STA PREV
-    RB_NONE:
-        MVI A,0FFH
+  pchar_macro_free: |
+    ; PCHAR: print char in E via BDOS 2
+    BDOS EQU 0005H
+    PCHAR:  MVI C,2
+            CALL BDOS
+            RET
+
+  nonblocking_keycheck: |
+    ; KEYCHECK: A=0 if none; else A=char
+    BDOS EQU 0005H
+    KEYCHECK:
+        MVI C,6
+        MVI E,0FFH
+        CALL BDOS
         RET
 
-    ; TX_BYTE: send A (only low 7 bits) and strobe on D7
-    TX_BYTE:
-        ANI 07FH
-        MOV B,A
-        MOV A,B
-        XRI OUT_INV
-        OUT DIO_PORT
-        MVI C,01H   ; DLY_PRE
-    TXD1: DCR C
-        JNZ TXD1
-        MOV A,B
-        ORI 080H
-        XRI OUT_INV
-        OUT DIO_PORT
-        MVI C,08H   ; DLY_STB
-    TXD2: DCR C
-        JNZ TXD2
-        MOV A,B
-        XRI OUT_INV
-        OUT DIO_PORT
-        MVI C,01H   ; DLY_POST
-    TXD3: DCR C
-        JNZ TXD3
-        RET
-
-  rtc_read_hbios: |
-    ; ---------- HBIOS RTC GET TIME (BCD YY MM DD HH MM SS) ----------
-    ; B=20h, HL -> 6-byte buffer, RST 1
-    RTCBUF: DS 6
+  hbios_rtc_read: |
+    ; READRTC: fills TIMBUF (BCD YY,MM,DD,HH,MM,SS)
+    TIMBUF: DS 6
     READRTC:
-        LXI H,RTCBUF
+        LXI H,TIMBUF
         MVI B,020H
         RST 1
         RET
 
-  bcd_to_bin_and_p2dig: |
-    ; ---------- BCD helpers ----------
-    ; Input: A=BCD (0x00..0x99). Output: A=binary 0..99
-    BCD2BIN:
-        MOV D,A
-        ANI 0FH
-        MOV E,A
-        MOV A,D
-        ANI 0F0H
-        RRC
-        RRC
-        RRC
-        RRC
-        MOV B,A
-        MOV A,B
-        ADD A
-        MOV C,A
-        MOV A,B
-        ADD A
-        ADD A
-        ADD A
-        ADD C
-        ADD E
-        RET
-    ; Print two ASCII digits from BCD in A (uses BDOS 2)
-    BDOS    EQU 0005H
-    CONOUT  EQU 2
-    PCHAR:
-        MVI C,CONOUT
-        CALL BDOS
-        RET
-    P2DIG:
-        MOV D,A
-        ANI 0FH
-        ADI '0'
-        MOV L,A
-        MOV A,D
-        ANI 0F0H
-        RRC
-        RRC
-        RRC
-        RRC
-        ADI '0'
-        MOV H,A
-        MOV E,H
-        CALL PCHAR
-        MOV E,L
-        CALL PCHAR
-        RET
+  sc126_led_seconds: |
+    ; Mirror seconds to SC126 LED latch (port 0Dh)
+    LEDP   EQU 00DH
+    INVERT EQU 00H      ; use FFh if LEDs are active-low
+    ; A on entry = seconds (0..59) binary
+    XRI INVERT
+    OUT LEDP
+    RET
 
-  file_seq_1k_example: |
-    ; ---------- CP/M sequential file example (1 KB write then read) ----------
-    BDOS    EQU 0005H
-    FCB     EQU FCBLOC
-    DMAADDR EQU DMABUF
+  sc719_raw_mirror: |
+    ; RAW MIRROR (all 8 bits) on SC719 at base port (e.g., 00h or 30h)
+    DIOPORT EQU 030H
     ORG 0100H
-    START:
-        ; delete old
-        LXI D,FCBLOC
-        MVI C,19
-        CALL BDOS
-        ; make
-        LXI D,FCBLOC
-        MVI C,22
-        CALL 
-        ; fill 1 KB buffer
-        LXI H,DMABUF
-        MVI A,055H
-        LXI B,0400H
-    FILL: MOV M,A
-        INX H
-        DCX B
-        MOV A,B
-        ORA C
-        JNZ FILL
-        ; set DMA
-        LXI D,DMABUF
-        MVI C,26
-        CALL 
-        ; write 8 records (8*128=1024)
-        LXI D,FCBLOC
-        MVI B,08H
-    WLP:  MVI C,21
-        CALL 
-        DCR B
-        JNZ WLP
-        ; close
-        LXI D,FCBLOC
-        MVI C,16
-        CALL 
-        RET
-    ; --- data ---
-    FCBLOC:
-        DB 0,'D','E','M','O','1','K',' ',' ',' ',' '
-        DB 'D','A','T'
-        DS 20
-    DMABUF: DS 1024
+    START: IN  DIOPORT
+           OUT DIOPORT
+           JMP START
     END START
 
-  mbasic_sc719_handshake: |
-    10 REM MBASIC SC719 strobe handshake (D7=strobe, D0..D6=data)
-    20 DEFINT A-Z: PO=48: IV=0: D1=60: D2=160: D3=60
-    30 V=0: GOSUB 500
-    40 ' TX: put B (0..127)
-    50 '   GOSUB 600
-    60 ' RX: GOSUB 650 -> RA=1 when RB valid
-    500 IF IV=255 THEN OUT PO,255-V ELSE OUT PO,V: RETURN
-    600 D=B AND 127: V=D: GOSUB 500: FOR J=1 TO D1: NEXT J
-    610 V=D OR 128: GOSUB 500: FOR J=1 TO D2: NEXT J
-    620 V=D: GOSUB 500: FOR J=1 TO D3: NEXT J: RETURN
-    630 S=INP(PO): IF IV=255 THEN S=255-S
-    640 SB=S AND 128
-    650 IF SB=0 THEN LS=0: RA=0: RETURN
-    660 IF LS=0 THEN RB=S AND 127: RA=1: LS=128: RETURN
-    670 RA=0: RETURN
-
-  # --- NEW: rock-solid decimal print helpers ( 9, fixed /10) ---
-  u32_decimal_print_bdos9: |
-    ; ---------- Decimal print of u32 at PTR32 via BDOS 9 ----------
-    ; Builds digits right-justified in OUTBUF and prints once.
-    ; Requires: OUTBUF DS 16, OUTEND EQU OUTBUF+15, OUTPTR DW 0, PTR32 DW 0
-    U32_PRINT_PTR_BDOS9:
-        LHLD    PTR32
-        MOV     A, M
-        STA     NW0
-        INX     H
-        MOV     A, M
-        STA     NW1
-        INX     H
-        MOV     A, M
-        STA     NW2
-        INX     H
-        MOV     A, M
-        STA     NW3
-        ; zero?
-        LDA     NW3
-        MOV     B, A
-        LDA     NW2
-        ORA     B
-        MOV     B, A
-        LDA     NW1
-        ORA     B
-        MOV     B, A
-        LDA     NW0
-        ORA     B
-        MOV     A, B
-        JNZ     U32P_CONT9
-        MVI     A, '0'
-        STA     OUTBUF+0
-        MVI     A, '$'
-        STA     OUTBUF+1
-        LXI     D, OUTBUF
-        MVI     C, 9
-        CALL    BDOS
-        RET
-    U32P_CONT9:
-        LXI     H, OUTEND
-        SHLD    OUTPTR
-        MVI     A, '$'
-        STA     OUTEND
-    U32P_LOOP9:
-        CALL    DIV32_10
-        LHLD    OUTPTR
-        DCX     H
-        MOV     A, B
-        ADI     '0'
-        MOV     M, A
-        SHLD    OUTPTR
-        LDA     NW3
-        MOV     B, A
-        LDA     NW2
-        ORA     B
-        MOV     B, A
-        LDA     NW1
-        ORA     B
-        MOV     B, A
-        LDA     NW0
-        ORA     B
-        MOV     A, B
-        JNZ     U32P_LOOP9
-        LHLD    OUTPTR
-        XCHG
-        MVI     C, 9
-        CALL    BDOS
-        RET
-    ; 32-bit /10 with proper 16-bit borrow handling
-    DIV32_10:
-        MVI     B, 0
-        LDA     NW3
-        CALL    DIV10_STEP
-        STA     NW3
-        LDA     NW2
-        CALL    DIV10_STEP
-        STA     NW2
-        LDA     NW1
-        CALL    DIV10_STEP
-        STA     NW1
-        LDA     NW0
-        CALL    DIV10_STEP
-        STA     NW0
-        RET
-    DIV10_STEP:
-        MOV     C, A
-        MOV     A, B
-        MOV     D, A
-        XRA     A
-        MOV     E, A
-    D10_160CHK:
-        MOV     A, D
-        CPI     0
-        JNZ     D10_160SUB
-        MOV     A, C
-        CPI     0A0H
-        JC      D10_10CHK
-    D10_160SUB:
-        MOV     A, C
-        SUI     0A0H
-        MOV     C, A
-        MOV     A, D
-        MVI     B, 0
-        SBB     B
-        MOV     D, A
-        MOV     A, E
-        ADI     16
-        MOV     E, A
-        JMP     D10_160CHK
-    D10_10CHK:
-        MOV     A, D
-        CPI     0
-        JNZ     D10_10SUB
-        MOV     A, C
-        CPI     10
-        JC      D10_DONE
-    D10_10SUB:
-        MOV     A, C
-        SUI     10
-        MOV     C, A
-        MOV     A, D
-        MVI     B, 0
-        SBB     B
-        MOV     D, A
-        INR     E
-        JMP     D10_10CHK
-    D10_DONE:
-        MOV     A, E
-        MOV     B, C
-        RET
-
-  # --- NEW: Prime generator (numbers only, no polling; ^C to stop) ---
-  primegen_forever_asm: |
-    ; ---------- PRIMEGEN (8080, CP/M, ^C to stop) ----------
-    ORG 0100H
-    BDOS    EQU 0005H
-    C_PRINT EQU 9
-    NL:     DB 13,10,'$'
-    TITLE:  DB 'Prime generator. (^C to stop)',13,10,'$'
-    ; State
-    N0: DB 0  ; u32 little-endian
-    N1: DB 0
-    N2: DB 0
-    N3: DB 0
-    ; Decimal helpers workspace
-    NW0: DB 0
-    NW1: DB 0
-    NW2: DB 0
-    NW3: DB 0
-    OUTBUF: DS 16
-    OUTEND  EQU OUTBUF+15
-    OUTPTR: DW 0
-    PTR32:  DW 0
-    ; Scratch for square
-    T0: DB 0
-    T1: DB 0
-    T2: DB 0
-    T3: DB 0
-    M0: DB 0
-    M1: DB 0
-    M2: DB 0
-    M3: DB 0
-
-    START:
-        LXI D,TITLE
-        MVI C,C_PRINT
-        CALL BDOS
-        MVI A,2
-        STA N0
-        XRA A
-        STA N1
-        STA N2
-        STA N3
-        LXI H,N0
-        SHLD PTR32
-        CALL U32_PRINT_PTR_BDOS9
-        LXI D,NL
-        MVI C,C_PRINT
-        CALL BDOS
-        MVI A,3
-        STA N0
-        XRA A
-        STA N1
-        STA N2
-        STA N3
-    MAIN:
-        MVI D,0
-        MVI E,3
-    DLP:
-        PUSH D
-        PUSH B
-        PUSH H
-        CALL SQR16_T
-        CALL T_CMP_N
-        POP H
-        POP B
-        POP D
-        JC  TRYD
-        JZ  TRYD
-        LXI H,N0
-        SHLD PTR32
-        CALL U32_PRINT_PTR_BDOS9
-        LXI D,NL
-        MVI C,C_PRINT
-        CALL BDOS
-        JMP NEXTN
-    TRYD:
-        PUSH D
-        CALL U32_MOD_DE
-        MOV A,H
-        ORA L
-        POP D
-        JZ  NEXTN
-        MVI A,2
-        ADD E
-        MOV E,A
-        JNC DLP
-        INR D
-        JMP DLP
-    NEXTN:
-        MVI A,2
-        ; ADD_N_U8 inline
-        MOV E,A
-        LDA N0
-        ADD E
-        STA N0
-        LDA N1
-        ACI 0
-        STA N1
-        LDA N2
-        ACI 0
-        STA N2
-        LDA N3
-        ACI 0
-        STA N3
-        JMP MAIN
-
-    ; --- math / compare (shared with profile's u32 print) ---
-    ; u32 % u16 (N3..N0) by DE -> remainder in HL
-    U32_MOD_DE:
-        XRA A
-        MOV H,A
-        MOV L,A
-        LDA N3
-        CALL MOD_STEP
-        LDA N2
-        CALL MOD_STEP
-        LDA N1
-        CALL MOD_STEP
-        LDA N0
-        CALL MOD_STEP
-        RET
-    MOD_STEP:
-        MOV H,L
-        MOV L,A
-    MS1:MOV A,H
-        CMP D
-        JC  MS0
-        JNZ MS2
-        MOV A,L
-        CMP E
-        JC  MS0
-    MS2:MOV A,L
-        SUB E
-        MOV L,A
-        MOV A,H
-        SBB D
-        MOV H,A
-        JMP MS1
-    MS0:RET
-
-    ; Square: (DE*DE) -> T0..T3
-    SQR16_T:
-        XRA A
-        STA T0
-        STA T1
-        STA T2
-        STA T3
-        MOV A,E
-        STA M0
-        MOV A,D
-        STA M1
-        XRA A
-        STA M2
-        STA M3
-        MVI C,16
-    SQ1:MOV A,E
-        ANI 1
-        JZ  SQ2
-        CALL T_ADD_M
-    SQ2:MOV A,D
-        RAR
-        MOV D,A
-        MOV A,E
-        RAR
-        MOV E,A
-        STC
-        CMC
-        LDA M0
-        RAL
-        STA M0
-        LDA M1
-        RAL
-        STA M1
-        LDA M2
-        RAL
-        STA M2
-        LDA M3
-        RAL
-        STA M3
-        DCR C
-        JNZ SQ1
-        RET
-
-    T_ADD_M:
-        LDA T0
-        MOV B,A
-        LDA M0
-        ADD B
-        STA T0
-        LDA T1
-        MOV B,A
-        LDA M1
-        ADC B
-        STA T1
-        LDA T2
-        MOV B,A
-        LDA M2
-        ADC B
-        STA T2
-        LDA T3
-        MOV B,A
-        LDA M3
-        ADC B
-        STA T3
-        RET
-
-    ; Compare T (u32) with N (u32): CY=1 if T<N, Z=1 if equal, else T>N
-    T_CMP_N:
-        LDA N3
-        MOV B,A
-        LDA T3
-        CMP B
-        JC  TLT
-        JZ  TEQ3
-        JMP TGT
-    TEQ3:
-        LDA N2
-        MOV B,A
-        LDA T2
-        CMP B
-        JC  TLT
-        JZ  TEQ2
-        JMP TGT
-    TEQ2:
-        LDA N1
-        MOV B,A
-        LDA T1
-        CMP B
-        JC  TLT
-        JZ  TEQ1
-        JMP TGT
-    TEQ1:
-        LDA N0
-        MOV B,A
-        LDA T0
-        CMP B
-        JC  TLT
-        JZ  TEQ0
-        JMP TGT
-    TEQ0:
-        XRA A
-        RET
-    TLT:STC
-        RET
-    TGT:STC
-        CMC
-        ORA A
-        RET
-
-    ; Include the u32 decimal print and DIV32_10 from 'u32_decimal_print_bdos9'
-    ; (paste those routines plus NW0..NW3, OUTBUF, OUTEND, OUTPTR, PTR32 above)
-
-    END START
-
-  # --- NEW: Key polling variants (use with caution) ---
-  key_poll_variants: |
-    ; ---------- Non-blocking key polling (choose ONE; see quirks) ----------
-    ; BDOS 11 (Console status): A=FFh if key ready else 00h
-    MVI C,11
-    CALL BDOS
-    ORA A
-    JZ  NO_KEY
-    MVI C,6
-    MVI E,00H
-    CALL BDOS
-    ; A now has the character
-
-    ; BDOS 6 peek (some ROMWBW builds return 0 on no key, others can be flaky)
-    MVI C,6
-    MVI E,0FFH
-    CALL BDOS
-    ; A=00h -> no key, else key code (but verify on your BIOS)
+  time_line_hhmmss: |
+    ; Print "HH:MM:SS" from TIMBUF (BCD)
+    BDOS EQU 0005H
+    CONOUT EQU 2
+    PCHAR: MVI C,CONOUT
+           CALL BDOS
+           RET
+    P2DIG: MOV D,A
+           ANI 0FH
+           ADI '0'
+           MOV L,A
+           MOV A,D
+           ANI 0F0H
+           RRC
+           RRC
+           RRC
+           RRC
+           ADI '0'
+           MOV H,A
+           MOV A,H
+           CALL PCHAR
+           MOV A,L
+           CALL PCHAR
+           RET
+    ; Usage: LDA TIMBUF+3 / CALL P2DIG / ':' / etc.
 
 checklist_before_run:
-  - "Verify SC719 base I/O (JP1) is 0x30 (48) on *both* boards."
-  - "Tie GND↔GND; keep ribbon short; avoid running mirror on both ends."
-  - "If LEDs look inverted, set IV=255 (BASIC) and/or IN_INV/OUT_INV=0FFH (ASM)."
-  - "For strobe protocols, start the listener first if possible; otherwise both ends should tolerate startup ordering."
-  - "When measuring speed, prefer RTC via HBIOS (RST 1, B=20h) or calibrated loop only if RTC absent."
-  - "When printing multi-char text or numbers, prefer BDOS 9 (single call, '$' string) over BDOS 2 loops."
+  - "Verify SC719 JP1 (I/O base). If LEDs look inverted, XOR 0xFF."
+  - "On SC126, LED latch at 0x0D: quick OUT test before fancy code."
+  - "When using HBIOS disk/NVRAM, keep buffers in the upper 32K."
+  - "For BDOS 9 strings, don’t forget trailing '$'."
+  - "For ASM.COM 8080: avoid Z80-only mnemonics and illegal DCX/INX forms."
+  - "Calibrate any busy-wait delays per your actual clock."
 
 known_quirks_and_tips:
-  - "ASM.COM requires hex with trailing H and leading 0 when starting with A–F (e.g., 0A0H)."
-  - "8080 `DAD` only accepts BC/DE/HL/SP; never `DAD B` etc."
-  - "Use `XRA A` to clear A; `ORA A` to test zero (sets flags)."
-  - "BDOS 6 (E=0FFh) *may* return 00h when no key — but some BIOS/ROMWBW combos behave differently. If polling causes stalls, remove it or use BDOS 11."
-  - "BDOS 11 (Console status) returns A=FFh when a key is ready, else 00h; still, avoid tight polls if your console driver is slow."
-  - "Prefer BDOS 9 for printing numbers/strings to avoid register clobber during digit loops."
-  - "If output freezes at prime 251, your `/10` routine is wrong for values ≥256. Use the fixed `DIV10_STEP` with proper 16-bit borrow in this profile."
-  - "For CP/M sequential I/O, always `SET DMA` (BDOS 26) before each read/write block."
-  - "When using the strobe, keep data stable while D7 is high; drop strobe only after the peer can sample."
-  - "Avoid delays inside the RX edge path; TX may shape strobe with tiny delays if needed."
+  - "Some RomWBW builds differ in how RST 1 is vectored; if HBIOS calls fault, stub them out and test pure BDOS first."
+  - "BDOS 6 (E=FFh) is the most reliable non-blocking key check on CP/M 2.2."
+  - "Use ORG 0100H and keep stack usage modest unless you set SP explicitly."
+  - "Prefer deterministic inner loops for benchmarks; collect time with RTC only outside the hot path."
 
-
+references:
+  docs:
+    - "RomWBW HBIOS + CP/M 2.2 BDOS programmer’s notes"
+    - "SC126 companion manual (Z180, LED latch @0Dh, onboard ports)"
+    - "SC700 field manual (SC719, SIO/CTC/PIO address patterns)"
+    - "Sample programs: LEDCOUNT, BIGCLOCK, TIME (8080 mnemonics)"
+  provenance: "This file merges the above so future codegen is consistent and 8080-correct."
