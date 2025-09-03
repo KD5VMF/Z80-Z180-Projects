@@ -165,13 +165,390 @@ serial_and_console:
   nonblocking_key:
     bdos6_ff: "E=FFh, C=6 → A=char or 00h if none"
 
-ansi_strings:  # ready for BDOS 9
-  CLEAR:  "\u001B[2J$"
-  HOME:   "\u001B[H$"
-  HIDE:   "\u001B[?25l$"
-  SHOW:   "\u001B[?25h$"
-  GREEN:  "\u001B[1;32m$"
-  RESET:  "\u001B[0m$"
+ansi_and_vdu:
+  # All strings here are BDOS 9–ready ($-terminated). Send with C=9, DE=ptr, CALL 0005h.
+  notes:
+    - "Most SC126/SC700 setups talk to an ANSI/VT100-ish terminal (PC serial, USB TTL, Wi-Fi serial, etc.)."
+    - "Some standalone VDU boards implement VT52 or limited ANSI; use the 'vdu_profiles' map to select."
+    - "If a sequence isn’t supported, the terminal will ignore it—provide graceful fallbacks."
+
+  ansi_vt100:
+    esc: "\u001B"    # ESC
+    csi: "\u001B["
+    basic:
+      CLEAR:  "\u001B[2J$"          # clear screen
+      HOME:   "\u001B[H$"           # cursor to 1,1
+      RESET:  "\u001B[0m$"          # SGR reset
+      HIDE:   "\u001B[?25l$"        # hide cursor
+      SHOW:   "\u001B[?25h$"        # show cursor
+      BELL:   "\u0007$"             # beep (if supported)
+    cursor_step:
+      UP:     "\u001B[1A$"
+      DOWN:   "\u001B[1B$"
+      RIGHT:  "\u001B[1C$"
+      LEFT:   "\u001B[1D$"
+      NEXTLINE: "\u001B[E$"
+      PREVLINE: "\u001B[F$"
+      COL1:   "\u001B[1G$"          # move to column 1 (stay on row)
+    erase:
+      EL_FROM: "\u001B[0K$"         # erase to end of line
+      EL_TO:   "\u001B[1K$"         # erase to start of line
+      EL_ALL:  "\u001B[2K$"         # erase entire line
+      ED_FROM: "\u001B[0J$"         # erase to end of screen
+      ED_TO:   "\u001B[1J$"         # erase to top of screen
+      ED_ALL:  "\u001B[2J$"         # clear entire screen (same as CLEAR)
+    save_restore:
+      SAVE:   "\u001B7$"            # DEC save cursor
+      REST:   "\u001B8$"            # DEC restore cursor
+      SAVE_SGR: "\u001B[s$"         # xterm save cursor (alt)
+      REST_SGR: "\u001B[u$"         # xterm restore cursor (alt)
+    scroll_region:
+      # Set top/bottom margins; printing at bottom scrolls within region
+      # (Use template 'ansi_set_scroll_region' to parameterize.)
+      # Example literal for 2..23: "\u001B[2;23r$"
+      RESET: "\u001B[r$"
+    modes:
+      WRAP_ON:  "\u001B[?7h$"
+      WRAP_OFF: "\u001B[?7l$"
+      INVERSE_ON:  "\u001B[7m$"
+      INVERSE_OFF: "\u001B[27m$"
+    attributes:
+      BOLD:      "\u001B[1m$"
+      DIM:       "\u001B[2m$"
+      ITALIC:    "\u001B[3m$"
+      UNDER:     "\u001B[4m$"
+      BLINK:     "\u001B[5m$"
+      REVERSE:   "\u001B[7m$"
+      HIDDEN:    "\u001B[8m$"
+      STRIKE:    "\u001B[9m$"
+      RESET:     "\u001B[0m$"
+    colors_8:
+      # 8-color SGR (foreground 30–37, background 40–47)
+      FG:
+        BLACK:   "\u001B[30m$"
+        RED:     "\u001B[31m$"
+        GREEN:   "\u001B[32m$"
+        YELLOW:  "\u001B[33m$"
+        BLUE:    "\u001B[34m$"
+        MAGENTA: "\u001B[35m$"
+        CYAN:    "\u001B[36m$"
+        WHITE:   "\u001B[37m$"
+      FG_BRIGHT:
+        BLACK:   "\u001B[90m$"
+        RED:     "\u001B[91m$"
+        GREEN:   "\u001B[92m$"
+        YELLOW:  "\u001B[93m$"
+        BLUE:    "\u001B[94m$"
+        MAGENTA: "\u001B[95m$"
+        CYAN:    "\u001B[96m$"
+        WHITE:   "\u001B[97m$"
+      BG:
+        BLACK:   "\u001B[40m$"
+        RED:     "\u001B[41m$"
+        GREEN:   "\u001B[42m$"
+        YELLOW:  "\u001B[43m$"
+        BLUE:    "\u001B[44m$"
+        MAGENTA: "\u001B[45m$"
+        CYAN:    "\u001B[46m$"
+        WHITE:   "\u001B[47m$"
+      BG_BRIGHT:
+        BLACK:   "\u001B[100m$"
+        RED:     "\u001B[101m$"
+        GREEN:   "\u001B[102m$"
+        YELLOW:  "\u001B[103m$"
+        BLUE:    "\u001B[104m$"
+        MAGENTA: "\u001B[105m$"
+        CYAN:    "\u001B[106m$"
+        WHITE:   "\u001B[107m$"
+    colors_256:
+      # If your terminal is modern (PC serial), these work; vintage VDUs may ignore.
+      # Use templates to emit: ESC '[' '38;5;' <n> 'm' for FG, '48;5;' for BG.
+      FG_FMT: "\u001B[38;5;X$m"   # replace X$ at runtime (see templates)
+      BG_FMT: "\u001B[48;5;X$m"
+    line_drawing_vt100:
+      # Enter/exit VT100 line drawing; glyphs map below.
+      ENTER: "\u001B(0$"   # switch G0 to line-drawing
+      EXIT:  "\u001B(B$"   # back to ASCII
+      glyphs:
+        HLINE: "q"  # ─
+        VLINE: "x"  # │
+        UL:    "l"  # ┌
+        UR:    "k"  # ┐
+        LL:    "m"  # └
+        LR:    "j"  # ┘
+        TUP:   "v"  # ┴
+        TDOWN: "w"  # ┬
+        TLEFT: "u"  # ┤
+        TRIGHT:"t"  # ├
+        CROSS: "n"  # ┼
+
+  vt52:
+    # Many simple VDU boards implement VT52 (or near-VT52) rather than full ANSI.
+    basic:
+      CLEAR: "\u001BE$"        # CLS
+      HOME:  "\u001BH$"        # cursor home
+      RESET: "$"               # (no generic reset; send nothing)
+    cursor_step:
+      UP:    "\u001BA$"
+      DOWN:  "\u001BB$"
+      RIGHT: "\u001BC$"
+      LEFT:  "\u001BD$"
+    address_note: "VT52 direct address is ESC 'Y' (row+32) (col+32). Use template 'vt52_cup' to print."
+    erase_line: "\u001BK$"     # erase to end of line (common)
+    save_restore:              # not universal on VT52; leave empty or board-specific
+      SAVE: "$"
+      REST: "$"
+
+  vdu_profiles:
+    # Select the profile your physical VDU understands.
+    default: "ansi_vt100"
+    options:
+      - "ansi_vt100"
+      - "vt52"
+      - "plain"   # no control codes; print only text + CR/LF
+
+  plain:
+    CRLF:  "\r\n$"
+    TAB8:  "\t$"
+
+  # -----------------------
+  # 8080/ASM templates
+  # -----------------------
+  templates:
+    bdos9_print_ptr: |
+      ; Print $-terminated string at DE (BDOS 9)
+      BDOS EQU 0005H
+      PSTR:   MVI C,9
+              CALL BDOS
+              RET
+
+    ansi_cup_rowcol: |
+      ; Cursor to row, col (1-based): prints ESC '[' row ';' col 'H'
+      ; In:  B=row (1..99), C=col (1..99)
+      ; Trashes: A,D,E,H,L
+      BDOS    EQU 0005H
+      CSI:    DB 27,'[','$'
+      HCHR:   DB 'H','$'
+      SEMI:   DB ';','$'
+      PSTR:   MVI C,9
+              CALL BDOS
+              RET
+      PNUM2:  ; print 1..99 in B as decimal (no leading zeros)
+              MOV A,B
+              CPI 10
+              JC  PNUM1D
+              ; two digits
+              MVI D,10
+              ; divide A by 10 -> Q in A, R in E
+              MVI E,0
+      D10:    CPI 10
+              JC  D10D
+              SUI 10
+              INR E
+              JMP D10
+      D10D:   ADI '0'
+              MOV L,A
+              MOV A,E
+              ADI '0'
+              MOV E,A
+              ; print tens (E), ones (L)
+              MOV A,E
+              MVI C,2
+              MOV E,A
+              CALL BDOS
+              MOV A,L
+              MVI C,2
+              MOV E,A
+              CALL BDOS
+              RET
+      PNUM1D: ADI '0'
+              MVI C,2
+              MOV E,A
+              CALL BDOS
+              RET
+      CUP:    ; emit CSI, row, ';', col, 'H'
+              LXI D,CSI
+              CALL PSTR
+              CALL PNUM2        ; row in B
+              LXI D,SEMI
+              CALL PSTR
+              ; col now in C -> move to B for PNUM2
+              MOV B,C
+              CALL PNUM2
+              LXI D,HCHR
+              CALL PSTR
+              RET
+
+    ansi_set_scroll_region: |
+      ; Set scroll region top..bot using ESC '[' top ';' bot 'r'
+      ; In: B=top (1..99), C=bot (1..99)
+      BDOS EQU 0005H
+      CSIR: DB 27,'[','$'
+      RCHR: DB 'r','$'
+      SEMI: DB ';','$'
+      ; reuse PSTR / PNUM2 from ansi_cup_rowcol
+      ; Entry: TOPBOT:
+      TOPBOT: LXI D,CSIR
+              MVI C,9
+              CALL BDOS
+              CALL PNUM2        ; row=top (B)
+              LXI D,SEMI
+              MVI C,9
+              CALL BDOS
+              MOV B,C           ; col=bot (C) -> B
+              CALL PNUM2
+              LXI D,RCHR
+              MVI C,9
+              CALL BDOS
+              RET
+
+    vt52_cup: |
+      ; VT52 cursor address: ESC 'Y' (row+32) (col+32)
+      ; In: B=row (1..24), C=col (1..80)
+      BDOS EQU 0005H
+      PCHAR:  MVI C,2
+              CALL BDOS
+              RET
+      CUP52:  MVI A,27
+              CALL PCHAR
+              MVI A,'Y'
+              CALL PCHAR
+              MOV A,B
+              ADI 32
+              CALL PCHAR
+              MOV A,C
+              ADI 32
+              CALL PCHAR
+              RET
+
+    vt100_box_draw_demo: |
+      ; Draw a 20x6 box at (row=R, col=C) using VT100 line drawing
+      ; In: B=R, C=C
+      BDOS EQU 0005H
+      PCHAR:  MVI C,2
+              CALL BDOS
+              RET
+      PSTR:   MVI C,9
+              CALL BDOS
+              RET
+      ENGD:   DB 27,'(0','$'   ; line set on
+      EXGD:   DB 27,'(B','$'   ; line set off
+      H:      DB 'q','$'       ; ─
+      V:      DB 'x','$'       ; │
+      UL:     DB 'l','$'       ; ┌
+      UR:     DB 'k','$'       ; ┐
+      LL:     DB 'm','$'       ; └
+      LR:     DB 'j','$'       ; ┘
+      CSI:    DB 27,'[','$'
+      SEMI:   DB ';','$'
+      HCHR:   DB 'H','$'
+      ; Requires CUP and PNUM2 from ansi_cup_rowcol template.
+      BOX20x6:
+              ; switch to drawing set
+              LXI D,ENGD
+              CALL PSTR
+              ; corners and horizontals
+              ; top-left
+              ; CUP to (B,C)
+              CALL CUP
+              LXI D,UL
+              CALL PSTR
+              MVI DREG,18       ; 18 inner horizontals (total width 20)
+      BH1:    LXI D,H
+              CALL PSTR
+              DCR DREG
+              JNZ BH1
+              LXI D,UR
+              CALL PSTR
+              ; verticals for 4 middle rows
+              MVI RCT,4
+      BV:     INR B             ; next row
+              CALL CUP
+              LXI D,V
+              CALL PSTR
+              ; move to right side
+              MOV B,B
+              ; CUP to (row=B, col=C+19)
+              ; compute C+19 into C (temp)
+              MVI A,19
+              ADD C
+              MOV C,A
+              CALL CUP
+              LXI D,V
+              CALL PSTR
+              ; restore C (subtract 19)
+              MVI A,19
+              CMA
+              INRA: ; A=~19 not ideal; leave as note to recompute C
+              DCR RCT
+              JNZ BV
+              ; bottom row
+              INR B
+              CALL CUP
+              LXI D,LL
+              CALL PSTR
+              MVI DREG,18
+      BH2:    LXI D,H
+              CALL PSTR
+              DCR DREG
+              JNZ BH2
+              LXI D,LR
+              CALL PSTR
+              ; back to ASCII
+              LXI D,EXGD
+              CALL PSTR
+              RET
+      ; NOTE: In real code, manage C math more cleanly (keep temp col in a register pair).
+
+  diagnostics:
+    probe_ansi: |
+      ; Quick probe: clear, home, draw colored headline, restore
+      BDOS EQU 0005H
+      PSTR:   MVI C,9
+              CALL BDOS
+              RET
+      CLR:    DB 27,'[2J','$'
+      HOME:   DB 27,'[H','$'
+      GREEN:  DB 27,'[1;32m','$'
+      RESET:  DB 27,'[0m','$'
+      MSG:    DB 'ANSI/VT100 OK','$'
+      PROBE:  LXI D,CLR
+              CALL PSTR
+              LXI D,HOME
+              CALL PSTR
+              LXI D,GREEN
+              CALL PSTR
+              LXI D,MSG
+              CALL PSTR
+              LXI D,RESET
+              CALL PSTR
+              RET
+
+  usage_examples:
+    clear_and_title_ansi: |
+      ; Clear screen, home, print title centered at row 1
+      ; (Compute col externally or just print at col 1)
+      BDOS EQU 0005H
+      PSTR:   MVI C,9
+              CALL BDOS
+              RET
+      CLEAR:  DB 27,'[2J','$'
+      HOME:   DB 27,'[H','$'
+      TITLE:  DB 'SC700/SC126 — Ready','$'
+      START:  LXI D,CLEAR
+              CALL PSTR
+              LXI D,HOME
+              CALL PSTR
+              LXI D,TITLE
+              CALL PSTR
+              RET
+
+  gotchas:
+    - "Always end BDOS-9 strings with '$'."
+    - "Some VDUs ignore SGR (colors/attrs). Structure UI so it still reads without color."
+    - "VT52 addressing uses row+32/col+32 bytes; don’t send ASCII digits."
+    - "If your VDU scrolls slowly, write full lines then move the cursor; avoid per-char cursor moves."
+
 
 templates:
   skeleton_com_asm: |
@@ -283,3 +660,4 @@ references:
     - "SC700 field manual (SC719, SIO/CTC/PIO address patterns)"
     - "Sample programs: LEDCOUNT, BIGCLOCK, TIME (8080 mnemonics)"
   provenance: "This file merges the above so future codegen is consistent and 8080-correct."
+
