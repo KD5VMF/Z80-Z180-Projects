@@ -86,5 +86,5 @@
 6010 GOSUB 5000               ' increment value
 6020 GOSUB 5300               ' build full field (spaces + digits)
 6030 R=0: C=6: GOSUB 450      ' print entire 10-char field
-
 6040 GOTO 6010
+
