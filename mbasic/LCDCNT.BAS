@@ -25,8 +25,7 @@
 230 '===== low-level LCD write: nibble in NB; FL=0 cmd / 1 data =====
 240 IF FL THEN BU=BU OR RM ELSE BU=BU AND (255-RM)
 250 NB=NB AND &HF
-260 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8
-)+((NB AND 8)*2)
+260 IF RV=0 THEN VV=NB*16 ELSE VV=((NB AND 1)*128)+((NB AND 2)*32)+((NB AND 4)*8)+((NB AND 8)*2)
 270 BU=(BU AND (255-DM)) OR VV
 280 OUT PT,BU: GOSUB 200
 290 BU=BU OR EM: OUT PT,BU: GOSUB 200
@@ -87,4 +86,5 @@
 6010 GOSUB 5000               ' increment value
 6020 GOSUB 5300               ' build full field (spaces + digits)
 6030 R=0: C=6: GOSUB 450      ' print entire 10-char field
+
 6040 GOTO 6010
