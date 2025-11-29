@@ -10,7 +10,7 @@ N                — Create a New partition entry.
 A                — Toggle the Active/boot flag…
 1                — …for partition #1 (marks it active).
 W                — Write the new partition table to the card.
-Q                — Quit FDISK80 (table is now saved on the card).
+y                 — Do you really want to write to disk? [N/y]: y
 
 CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M slice).
                   (Type CAPITAL Y when it asks. This doesn’t low-level format—just resets the directory.)
@@ -18,3 +18,4 @@ CLRDIR C:        — Initialize (clear) the CP/M directory on C: (the first CP/M
 From B: do...
 copy *.* c:      — Copy all files from B: (RAM disk) to C: (SD). 
                   (If COPY doesn’t accept this form on your setup, use PIP instead:  PIP C:=B:*.* )
+
