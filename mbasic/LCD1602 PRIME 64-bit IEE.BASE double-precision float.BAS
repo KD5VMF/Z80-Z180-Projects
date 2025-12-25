@@ -1,7 +1,7 @@
 10 REM === LCD1602 via SC719 (0xDA) b PRIME DISPLAY, 10-DIGIT RIGHT ALIGNED ===
 20 REM SC700 / Z180 with SC719 I/O card. RS=P2, E=P3, D4..D7=P4..P7, RW=GND
 30 DEFINT A-Z: DEFDBL P,N,X,D,S
-40 PT=&HDA               ' set SC719 port for your LCD
+40 PT=&H0D               ' set SC719 port for your LCD
 50 K=0                   ' delay scale
 60 RV=0                  ' 0=normal bit order, 1=reversed on P4..P7
 70 '---- bit masks ----
