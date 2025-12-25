@@ -1,6 +1,6 @@
 10 ' === LED MATH LAB b 10 Patterns + Cycle Mode (MBASIC-80 Rev 5.21) ===
 20 ' SC7xx LEDs on I/O port (edit LEDPORT if needed)
-30 LEDPORT = &H0
+30 LEDPORT = &H0D
 40 RANDOMIZE
 50 DIM P(7) : P(0)=1: FOR I=1 TO 7: P(I)=P(I-1)*2: NEXT I
 60 PRINT "LED MATH LAB  b  SC7xx LEDs on port &H00 (edit line 30 for yours)"
@@ -168,4 +168,5 @@
 10060 POS2=POS2-1: IF POS2<0 THEN POS2=7
 10070 IF M=0 THEN CSTEP=CSTEP+1: IF CSTEP>=STEPS THEN RETURN
 10080 GOTO 10020
+
 
