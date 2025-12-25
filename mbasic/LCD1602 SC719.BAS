@@ -13,7 +13,7 @@
 130 REM ================================================================
 
 30 DEFINT A-Z
-40 PT=&HAA               ' SC719 output port (change if needed)
+40 PT=&H00               ' SC719 output port (change if needed)
 50 K=1                   ' timing scale: raise if LCD is picky
 60 RV=0                  ' 0=normal bit order, 1=reversed on P4..P7
 70 '---- bit masks (MBASIC = 2-char significance) ----
