@@ -1,4 +1,4 @@
-# LCDCLOCK_CLEAN — SC126/RCBus + SC719 LCD1602 Clock (Z80, RomWBW)
+# LCDCLOCK_CLEAN — SC126/RCBus + SC719 LCD1602 Clock (Z80/Z180, RomWBW)
 
 A tiny, rock-solid LCD clock for **RomWBW CP/M** systems that have an **SC719 I/O + LCD1602** wired per the Small Computer Central example.
 
