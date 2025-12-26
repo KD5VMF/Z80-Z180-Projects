@@ -25,10 +25,10 @@ No terminal output, no BDOS printing, no monitor/ROM console calls — just clea
 
 ## Hardware Requirements
 
-- **CPU / Bus**: Z80/8080/8085 (works fine on an 8085-clock board too)
+- **CPU / Bus**: Z80/Z180 (works fine on an 8085-clock board too)
 - **RomWBW** with CP/M and HBIOS enabled
 - **RTC supported by RomWBW** (HBIOS `RTCGETTIM`)
-- **SC719 I/O module** (or compatible) connected to an **LCD1602** (HD44780)
+- **SC719 I/O module** (or compatible) connected to an **LCD1602** (HD44780) @ 00H <-- This can be change in the ASM file.
 
 ### LCD Wiring (SC719 → LCD1602, 4-bit mode)
 
