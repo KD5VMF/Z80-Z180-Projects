@@ -30,6 +30,8 @@
 ;    - Delay loops are "crude" and depend on CPU speed. If LCD init is flaky,
 ;      increase delays.
 ;    - We only refresh the LCD when seconds change (less flicker, less bus spam).
+;
+;  URL: https://smallcomputercentral.com/examples/example-alphanumeric-lcd/
 ;===============================================================================
 
             ORG     0100H
@@ -454,3 +456,4 @@ STACK:       DS      80
 STACKEND:
 
             END     START
+
