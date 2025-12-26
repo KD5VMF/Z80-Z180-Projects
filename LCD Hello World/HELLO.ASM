@@ -12,6 +12,7 @@
 ;
 ;  Run under CP/M:  A>HELLO
 ;  (will hang at end so you can see display)
+; URL: https://smallcomputercentral.com/examples/example-alphanumeric-lcd/
 ; ============================================================
 
         ORG     0100H
@@ -271,3 +272,4 @@ D60:    CALL    DELAY_2MS
         RET
 
         END
+
