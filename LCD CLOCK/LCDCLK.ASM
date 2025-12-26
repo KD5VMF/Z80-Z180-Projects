@@ -1,36 +1,75 @@
+;===============================================================================
+;  SC719_LCD_RTC_Clock.asm
+;
+;  A tiny real-time clock display for RomWBW / HBIOS systems using an SC719
+;  HD44780-compatible 16x2 LCD interface in 4-bit mode.
+;
+;  Displays:
+;    Line 1 (centered):  HH:MM:SS   (blinking colons)
+;    Line 2 (centered):  20YY-MM-DD
+;
+;  Hardware assumptions (SC719 style LCD port):
+;    PORT_LCD (default 00h) is the LCD control/data latch.
+;      bit2 = RS  (0=command, 1=data)
+;      bit3 = E   (enable pulse)
+;      bit4-7 = D4-D7 (4-bit data bus)
+;      R/W is tied low (write-only)
+;
+;  Software assumptions (RomWBW HBIOS):
+;    RTCGETTIM is called via:
+;      B  = 20h
+;      HL = buffer (6 bytes)
+;      RST 1
+;
+;    Buffer returns (BCD):
+;      [0]=YY  [1]=MM  [2]=DD  [3]=HH  [4]=MM  [5]=SS
+;
+;  Assemble to a .COM style program (ORG 0100h), then run.
+;
+;  Notes:
+;    - Delay loops are "crude" and depend on CPU speed. If LCD init is flaky,
+;      increase delays.
+;    - We only refresh the LCD when seconds change (less flicker, less bus spam).
+;===============================================================================
+
             ORG     0100H
             JMP     START
 
-; ---------------- CONFIG ----------------
+;---------------------- CONFIG -------------------------------------------------
 PORT_LCD    EQU     00H            ; SC719 base address (JP1 = 00h)
 
 ; Centered positions on 16x2:
-; "HH:MM:SS" (8 chars) -> col 4
-; "20YY-MM-DD" (10 chars) -> col 3
-TIME_POS    EQU     04H            ; row1 col4
-DATE_POS    EQU     43H            ; row2 col3 (0x40 + 3)
+;   "HH:MM:SS" = 8 chars, centered => column 4 (0-based) on line 1
+;   "20YY-MM-DD" = 10 chars, centered => column 3 on line 2
+;
+; HD44780 DDRAM:
+;   line1 starts at 00h
+;   line2 starts at 40h
+TIME_POS    EQU     04H            ; line1 col4
+DATE_POS    EQU     43H            ; line2 col3 (40h + 03h)
 
-; ============================================================
+;===============================================================================
 START:
             DI
             LXI     SP,STACKEND
 
-            ; Init vars
+            ; Initialize variables
             XRA     A
-            STA     BLINK
+            STA     BLINK          ; 0/1 toggles each second for blinking ':'
             MVI     A,0FFH
-            STA     PREV_SEC
+            STA     PREV_SEC       ; previous seconds (init to impossible value)
 
-            ; LCD init
-            CALL    DELAY_60MS
-            CALL    LCD_INIT_4BIT
+            ; LCD initialization sequence
+            CALL    DELAY_60MS     ; give LCD power-up time
+            CALL    LCD_INIT_4BIT  ; put LCD in 4-bit mode, clear, etc.
             CALL    LCD_CLEAR
 
 MAIN:
+            ; Read RTC into TIMBUF (BCD)
             CALL    READRTC
 
-            ; update only when seconds changes
-            LDA     TIMBUF+5
+            ; Only update if seconds changed
+            LDA     TIMBUF+5       ; SS
             MOV     D,A
             LDA     PREV_SEC
             CMP     D
@@ -39,21 +78,21 @@ MAIN:
             MOV     A,D
             STA     PREV_SEC
 
-            ; toggle blink flag + heartbeat LED (bit0 only)
+            ; Flip blink flag for ':' characters
             CALL    TOGGLE_BLINK
-            CALL    TOGGLE_LED0
 
+            ; Build strings for display
             CALL    BUILD_TIME
             CALL    BUILD_DATE
 
-            ; write time (overwrite only these chars)
+            ; Write time string (8 chars)
             MVI     A,TIME_POS
             CALL    LCD_SET_DDRAM
             LXI     H,TIME_STR
             MVI     B,08H
             CALL    LCD_PUTN
 
-            ; write date
+            ; Write date string (10 chars)
             MVI     A,DATE_POS
             CALL    LCD_SET_DDRAM
             LXI     H,DATE_STR
@@ -61,24 +100,29 @@ MAIN:
             CALL    LCD_PUTN
 
 IDLE:
+            ; Small idle delay to avoid hammering RTC/HBIOS
             CALL    SHORTDLY
             JMP     MAIN
 
-; ============================================================
-; RomWBW HBIOS RTCGETTIM
-;   B=20h, HL=buffer, RST 1
-;   returns YY,MM,DD,HH,MM,SS (BCD) into TIMBUF[0..5]
-; (same as your gCLOCK.ASM) :contentReference[oaicite:1]{index=1}
-; ============================================================
+;===============================================================================
+; READRTC
+;   RomWBW HBIOS RTCGETTIM
+;     B = 20h
+;     HL = TIMBUF
+;     RST 1
+;   Returns YY,MM,DD,HH,MM,SS in BCD into TIMBUF[0..5].
+;===============================================================================
 READRTC:
             LXI     H,TIMBUF
             MVI     B,020H
             RST     1
             RET
 
-; ============================================================
-; Build "HH:MM:SS" (with blinking ':' every other tick)
-; ============================================================
+;===============================================================================
+; BUILD_TIME
+;   Creates TIME_STR = "HH:MM:SS"
+;   The ':' characters blink on/off each second.
+;===============================================================================
 BUILD_TIME:
             ; HH
             LDA     TIMBUF+3
@@ -88,14 +132,16 @@ BUILD_TIME:
             MOV     A,L
             STA     TIME_STR+1
 
-            ; colon based on BLINK
+            ; First colon: ':' or ' ' depending on BLINK
             LDA     BLINK
             ANI     01H
-            JZ      CT_SPACE
+            JZ      BT_COL_SPACE
             MVI     A,':'
-            JMP     CT_SET
-CT_SPACE:   MVI     A,' '
-CT_SET:     STA     TIME_STR+2
+            JMP     BT_COL_SET
+BT_COL_SPACE:
+            MVI     A,' '
+BT_COL_SET:
+            STA     TIME_STR+2
 
             ; MM
             LDA     TIMBUF+4
@@ -105,7 +151,7 @@ CT_SET:     STA     TIME_STR+2
             MOV     A,L
             STA     TIME_STR+4
 
-            ; second colon matches first
+            ; Second colon matches first
             LDA     TIME_STR+2
             STA     TIME_STR+5
 
@@ -118,9 +164,10 @@ CT_SET:     STA     TIME_STR+2
             STA     TIME_STR+7
             RET
 
-; ============================================================
-; Build "20YY-MM-DD"
-; ============================================================
+;===============================================================================
+; BUILD_DATE
+;   Creates DATE_STR = "20YY-MM-DD"
+;===============================================================================
 BUILD_DATE:
             MVI     A,'2'
             STA     DATE_STR+0
@@ -158,32 +205,29 @@ BUILD_DATE:
             STA     DATE_STR+9
             RET
 
-; ============================================================
-; Helpers
-; ============================================================
+;===============================================================================
+; TOGGLE_BLINK
+;   BLINK ^= 1
+;===============================================================================
 TOGGLE_BLINK:
             LDA     BLINK
             XRI     01H
             STA     BLINK
             RET
 
-; Toggle only bit0 on the SC719 port (E=0, RS=0, data=0 -> safe)
-TOGGLE_LED0:
-            LDA     LED0
-            XRI     01H
-            STA     LED0
-            ANI     01H
-            OUT     PORT_LCD
-            RET
-
-; BCD in A -> ASCII digits (H tens, L ones)
+;===============================================================================
+; BCD2ASC
+;   Input:  A = packed BCD (e.g., 0x25 = "25")
+;   Output: H = ASCII tens, L = ASCII ones
+;===============================================================================
 BCD2ASC:
             MOV     D,A
-            ANI     00FH
+            ANI     00FH           ; low nibble = ones
             ADI     '0'
             MOV     L,A
+
             MOV     A,D
-            ANI     0F0H
+            ANI     0F0H           ; high nibble = tens
             RRC
             RRC
             RRC
@@ -192,7 +236,10 @@ BCD2ASC:
             MOV     H,A
             RET
 
-; Print B bytes from [HL]
+;===============================================================================
+; LCD_PUTN
+;   Print B bytes from [HL] as LCD data bytes.
+;===============================================================================
 LCD_PUTN:
             MOV     A,B
             ORA     A
@@ -204,10 +251,12 @@ LP1:        MOV     A,M
             JNZ     LP1
             RET
 
-; ============================================================
-; LCD 4-bit driver (SC719 mapping)
-;   bit2=RS, bit3=E, bits4-7=D4-D7, R/W low
-; ============================================================
+;===============================================================================
+; LCD 4-bit low-level routines (SC719 mapping)
+;   bit2=RS, bit3=E, bits4-7=D4-D7
+;===============================================================================
+
+; Pulse the Enable line (E) to latch current nibble into LCD
 LCD_PULSE_E:
             OUT     PORT_LCD
             CALL    DELAY_TINY
@@ -219,17 +268,20 @@ LCD_PULSE_E:
             CALL    DELAY_TINY
             RET
 
+; Send an upper nibble as a command (RS=0)
 LCD_NIB_CMD:
-            ANI     0F0H           ; RS=0
+            ANI     0F0H           ; keep D4-D7, clear RS/E
             CALL    LCD_PULSE_E
             RET
 
+; Send an upper nibble as data (RS=1)
 LCD_NIB_DATA:
             ANI     0F0H
             ORI     04H            ; RS=1
             CALL    LCD_PULSE_E
             RET
 
+; Send a full 8-bit command in two nibbles
 LCD_BYTE_CMD:
             PUSH    D
             MOV     D,A
@@ -238,7 +290,7 @@ LCD_BYTE_CMD:
             CALL    LCD_NIB_CMD
 
             MOV     A,D
-            ANI     00FH
+            ANI     00FH           ; move low nibble into high nibble
             RLC
             RLC
             RLC
@@ -247,9 +299,10 @@ LCD_BYTE_CMD:
             CALL    LCD_NIB_CMD
 
             POP     D
-            CALL    DELAY_2MS
+            CALL    DELAY_2MS      ; safe wait for most commands
             RET
 
+; Send a full 8-bit data byte in two nibbles
 LCD_BYTE_DATA:
             PUSH    D
             MOV     D,A
@@ -270,23 +323,27 @@ LCD_BYTE_DATA:
             CALL    DELAY_2MS
             RET
 
+; Set LCD cursor via DDRAM address (A = address)
 LCD_SET_DDRAM:
             ORI     080H
             CALL    LCD_BYTE_CMD
             RET
 
+; Clear LCD display
 LCD_CLEAR:
             MVI     A,001H
             CALL    LCD_BYTE_CMD
-            CALL    DELAY_60MS
+            CALL    DELAY_60MS     ; clear needs longer delay
             RET
 
+; Put LCD into 4-bit mode and configure 2-line display
 LCD_INIT_4BIT:
             XRA     A
             OUT     PORT_LCD
             CALL    DELAY_20MS
 
-            ; 8-bit wake (send 0x3 high nibble three times)
+            ; HD44780 8-bit wake-up sequence:
+            ; send high nibble 0x3 three times (still in unknown state)
             MVI     A,030H
             CALL    LCD_NIB_CMD
             CALL    DELAY_10MS
@@ -297,28 +354,36 @@ LCD_INIT_4BIT:
             CALL    LCD_NIB_CMD
             CALL    DELAY_10MS
 
-            ; switch to 4-bit
+            ; switch to 4-bit mode (send high nibble 0x2)
             MVI     A,020H
             CALL    LCD_NIB_CMD
             CALL    DELAY_10MS
 
-            ; function set / display / entry
+            ; function set: 4-bit, 2 lines, 5x8 font
             MVI     A,028H
             CALL    LCD_BYTE_CMD
+
+            ; display off
             MVI     A,008H
             CALL    LCD_BYTE_CMD
+
+            ; clear
             MVI     A,001H
             CALL    LCD_BYTE_CMD
             CALL    DELAY_60MS
+
+            ; entry mode: increment, no shift
             MVI     A,006H
             CALL    LCD_BYTE_CMD
+
+            ; display on, cursor off, blink off
             MVI     A,00CH
             CALL    LCD_BYTE_CMD
             RET
 
-; ============================================================
-; Delays (crude)
-; ============================================================
+;===============================================================================
+; Crude delay loops (tweak if needed for your CPU speed)
+;===============================================================================
 DELAY_TINY:
             PUSH    B
             MVI     B,12H
@@ -367,6 +432,7 @@ D60:        CALL    DELAY_2MS
             POP     B
             RET
 
+; Light throttle delay between polls
 SHORTDLY:
             LXI     H,2000H
 SD1:        DCX     H
@@ -375,15 +441,14 @@ SD1:        DCX     H
             JNZ     SD1
             RET
 
-; ============================================================
-; Data + Safe stack
-; ============================================================
-TIMBUF:      DS      6
-TIME_STR:    DS      8
-DATE_STR:    DS      10
-PREV_SEC:    DB      00H
-BLINK:       DB      00H
-LED0:        DB      00H
+;===============================================================================
+; Data + stack
+;===============================================================================
+TIMBUF:      DS      6              ; YY MM DD HH MM SS (BCD)
+TIME_STR:    DS      8              ; "HH:MM:SS"
+DATE_STR:    DS      10             ; "20YY-MM-DD"
+PREV_SEC:    DB      00H            ; previous seconds (BCD)
+BLINK:       DB      00H            ; 0/1 toggles each second
 
 STACK:       DS      80
 STACKEND:
