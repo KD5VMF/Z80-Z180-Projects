@@ -70,10 +70,10 @@ PORT_LCD    EQU     00H
 
 ## Files
 
-- `LCDCLOCK_CLEAN.ASM` — source code (8080 mnemonics, assembles fine on Z80 assemblers)
+- `LCDCLK.ASM` — source code (8080 mnemonics, assembles fine on Z80 assemblers)
 
 Output:
-- `LCDCLOCK.COM` — CP/M executable
+- `LCDCLK.COM` — CP/M executable
 
 ---
 
@@ -84,13 +84,13 @@ Exact command depends on your assembler. Examples:
 
 **If using `ZASM`:**
 ```text
-A> ZASM LCDCLOCK_CLEAN.ASM LCDCLOCK.COM
+A> ZASM LCDCLK.ASM LCDCLK.COM
 ```
 
 **If using `ASM` / `MAC` style tools:**
 ```text
-A> ASM LCDCLOCK_CLEAN
-A> LOAD LCDCLOCK_CLEAN
+A> ASM LCDCLK
+A> LOAD LCDCLK
 ```
 
 If your assembler produces `.HEX` first, then use `LOAD` to convert it to `.COM` (see next section).
@@ -103,10 +103,10 @@ This section is for the “pure CP/M” workflow where you **type/paste** the In
 
 ### 1) Create the HEX file using ED
 
-Start ED and create a new file (example name: `LCDCLOCK.HEX`):
+Start ED and create a new file (example name: `LCDCLK.HEX`):
 
 ```text
-A> ED LCDCLOCK.HEX
+A> ED LCDCLK.HEX
 ```
 
 Inside ED:
@@ -127,7 +127,7 @@ Inside ED:
 
 You should now have:
 ```text
-A> DIR LCDCLOCK.HEX
+A> DIR LCDCLK.HEX
 ```
 
 > Tip: If you’re pasting from a terminal program, enable “paste delay” if needed so CP/M doesn’t drop characters.
@@ -141,14 +141,14 @@ CP/M’s `LOAD` converts Intel HEX into a `.COM` executable.
 Run:
 
 ```text
-A> LOAD LCDCLOCK
+A> LOAD LCDCLK
 ```
 
-That reads `LCDCLOCK.HEX` and creates `LCDCLOCK.COM`.
+That reads `LCDCLK.HEX` and creates `LCDCLK.COM`.
 
 Verify:
 ```text
-A> DIR LCDCLOCK.COM
+A> DIR LCDCLK.COM
 ```
 
 ---
@@ -158,7 +158,7 @@ A> DIR LCDCLOCK.COM
 Just execute the program:
 
 ```text
-A> LCDCLOCK
+A> LCDCLK
 ```
 
 You should see the LCD update once per second:
