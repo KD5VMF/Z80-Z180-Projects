@@ -5,7 +5,7 @@
 ;  HD44780-compatible 16x2 LCD interface in 4-bit mode.
 ;
 ;  Displays:
-;    Line 1 (centered):  HH:MM:SS   (blinking colons)
+;    Line 1 (centered):  HH:MM:SS   (colons ALWAYS ON)
 ;    Line 2 (centered):  20YY-MM-DD
 ;
 ;  Hardware assumptions (SC719 style LCD port):
@@ -56,8 +56,6 @@ START:
             LXI     SP,STACKEND
 
             ; Initialize variables
-            XRA     A
-            STA     BLINK          ; 0/1 toggles each second for blinking ':'
             MVI     A,0FFH
             STA     PREV_SEC       ; previous seconds (init to impossible value)
 
@@ -79,9 +77,6 @@ MAIN:
 
             MOV     A,D
             STA     PREV_SEC
-
-            ; Flip blink flag for ':' characters
-            CALL    TOGGLE_BLINK
 
             ; Build strings for display
             CALL    BUILD_TIME
@@ -123,7 +118,7 @@ READRTC:
 ;===============================================================================
 ; BUILD_TIME
 ;   Creates TIME_STR = "HH:MM:SS"
-;   The ':' characters blink on/off each second.
+;   Colons are ALWAYS ON (no blinking).
 ;===============================================================================
 BUILD_TIME:
             ; HH
@@ -134,15 +129,8 @@ BUILD_TIME:
             MOV     A,L
             STA     TIME_STR+1
 
-            ; First colon: ':' or ' ' depending on BLINK
-            LDA     BLINK
-            ANI     01H
-            JZ      BT_COL_SPACE
+            ; First colon ALWAYS ':'
             MVI     A,':'
-            JMP     BT_COL_SET
-BT_COL_SPACE:
-            MVI     A,' '
-BT_COL_SET:
             STA     TIME_STR+2
 
             ; MM
@@ -153,8 +141,8 @@ BT_COL_SET:
             MOV     A,L
             STA     TIME_STR+4
 
-            ; Second colon matches first
-            LDA     TIME_STR+2
+            ; Second colon ALWAYS ':'
+            MVI     A,':'
             STA     TIME_STR+5
 
             ; SS
@@ -205,16 +193,6 @@ BUILD_DATE:
             STA     DATE_STR+8
             MOV     A,L
             STA     DATE_STR+9
-            RET
-
-;===============================================================================
-; TOGGLE_BLINK
-;   BLINK ^= 1
-;===============================================================================
-TOGGLE_BLINK:
-            LDA     BLINK
-            XRI     01H
-            STA     BLINK
             RET
 
 ;===============================================================================
@@ -450,10 +428,8 @@ TIMBUF:      DS      6              ; YY MM DD HH MM SS (BCD)
 TIME_STR:    DS      8              ; "HH:MM:SS"
 DATE_STR:    DS      10             ; "20YY-MM-DD"
 PREV_SEC:    DB      00H            ; previous seconds (BCD)
-BLINK:       DB      00H            ; 0/1 toggles each second
 
 STACK:       DS      80
 STACKEND:
 
             END     START
-
