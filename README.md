@@ -1,5 +1,5 @@
 # Z80/Z180 Projects — SC7xx (CP/M & RomWBW)
-# (e.g., SC722, SC719, SC126, SC794)
+# (e.g., SC722, SC719, SC131, SC126, SC794)
 
 I use [WWW.ASM8080.COM](https://www.asm80.com/) To assemble my code. I then copy the HEX and paste it to the system through Tera Term to a FileName.hex. I will use ED FILENAME.HEX, PRESS I, Then PASTE, Then Press CTRL-Z and last Press E to Save and exit. Type LOAD FILENAME to link the hex into FILENAME.COM. Now if all went well we can run our new .COM program. My programs are all 8080 for now as I do 8085 work and it helps me with coding for all my systems.
 
