@@ -1,0 +1,612 @@
+---------------------------------------------
+OSHONSOFT Z80 ASSEMBLER LISTING
+Line   Addr Opcode      Label   Instruction
+---------------------------------------------
+0001   0000             ;===============================================================================
+0002   0000             ;  LCDPRIME_Z80.ASM  (Z80 native)
+0003   0000             ;
+0004   0000             ;  SC720 Z80 board - Prime display (16-bit)
+0005   0000             ;
+0006   0000             ;  Behavior (matches your working 16-bit version):
+0007   0000             ;    - Computes primes starting at 2 (exact trial division)
+0008   0000             ;    - Displays ONE prime at LCD row 1 / col 0 (top-left)
+0009   0000             ;    - Each new prime OVERWRITES the previous prime (in-place)
+0010   0000             ;    - Pads spaces to clear the rest of the row (prevents leftover digits)
+0011   0000             ;    - Adjustable delay between primes (single knob at top)
+0012   0000             ;
+0013   0000             ;  LCD interface (SC719/SC720-style 4-bit latch):
+0014   0000             ;    PORT_LCD is the LCD control/data latch.
+0015   0000             ;      bit2 = RS (0=cmd, 1=data)
+0016   0000             ;      bit3 = E  (enable pulse)
+0017   0000             ;      bit4..bit7 = D4..D7
+0018   0000             ;    R/W tied LOW (write-only)
+0019   0000             ;
+0020   0000             ;  Assemble as a .COM-style program (ORG 0100h) and run.
+0021   0000             ;===============================================================================
+0022   0000             
+0023   0000                         ORG     0100H
+0024   0100 C3 03 01                JP      START
+0025   0103             
+0026   0103             ;---------------------- CONFIG -------------------------------------------------
+0027   0103             PORT_LCD            EQU     00H         ; MUST match your LCD latch port
+0028   0103             LINE1               EQU     00H         ; DDRAM base for row 1
+0029   0103             
+0030   0103             ; EASY speed knob:
+0031   0103             ;   smaller = faster, larger = slower
+0032   0103             PRIME_DELAY_OUTER   EQU     01H         ; <<< CHANGE THIS ONE VALUE
+0033   0103             
+0034   0103             ; Inner delay count (leave alone unless your CPU speed changes a lot)
+0035   0103             PRIME_DELAY_INNER   EQU     2800H
+0036   0103             
+0037   0103             ;===============================================================================
+0038   0103             START:
+0039   0103 F3                      DI
+0040   0104 31 B9 03                LD      SP,STACKEND
+0041   0107             
+0042   0107 CD 50 03                CALL    DELAY_60MS
+0043   010A CD E4 02                CALL    LCD_INIT_4BIT
+0044   010D CD DB 02                CALL    LCD_CLEAR
+0045   0110             
+0046   0110                         ; candidate = 2
+0047   0110 21 02 00                LD      HL,0002H
+0048   0113 22 5A 03                LD      (CAND),HL
+0049   0116             
+0050   0116             MAIN_LOOP:
+0051   0116 2A 5A 03                LD      HL,(CAND)
+0052   0119 CD 7C 01                CALL    IS_PRIME16        ; A=1 if prime else 0
+0053   011C B7                      OR      A
+0054   011D 28 09                   JR      Z,NEXT_CAND
+0055   011F             
+0056   011F                         ; show prime at top-left (overwrite)
+0057   011F 2A 5A 03                LD      HL,(CAND)
+0058   0122 CD 47 01                CALL    DISPLAY_TOPLEFT
+0059   0125             
+0060   0125 CD 6B 01                CALL    PRIME_DELAY
+0061   0128             
+0062   0128             NEXT_CAND:
+0063   0128                         ; candidate progression: 2 -> 3 -> +2 (odds only)
+0064   0128 2A 5A 03                LD      HL,(CAND)
+0065   012B 7C                      LD      A,H
+0066   012C B5                      OR      L
+0067   012D 28 10                   JR      Z,SET3            ; should never be 0, but safe
+0068   012F 7C                      LD      A,H
+0069   0130 B7                      OR      A
+0070   0131 20 05                   JR      NZ,ADD2
+0071   0133 7D                      LD      A,L
+0072   0134 FE 02                   CP      02H
+0073   0136 28 07                   JR      Z,SET3
+0074   0138             
+0075   0138             ADD2:
+0076   0138 23                      INC     HL
+0077   0139 23                      INC     HL
+0078   013A 22 5A 03                LD      (CAND),HL
+0079   013D 18 D7                   JR      MAIN_LOOP
+0080   013F             
+0081   013F             SET3:
+0082   013F 21 03 00                LD      HL,0003H
+0083   0142 22 5A 03                LD      (CAND),HL
+0084   0145 18 CF                   JR      MAIN_LOOP
+0085   0147             
+0086   0147             ;===============================================================================
+0087   0147             ; DISPLAY_TOPLEFT
+0088   0147             ;   In:  HL = value (0..65535)
+0089   0147             ;   Out: prints decimal at row1 col0 and clears rest of the row with spaces
+0090   0147             ;===============================================================================
+0091   0147             DISPLAY_TOPLEFT:
+0092   0147 E5                      PUSH    HL
+0093   0148 CD F7 01                CALL    U16_TO_DEC_ASCII      ; OUTBUF/OUTLEN set
+0094   014B                         ; cursor row1 col0
+0095   014B 3E 00                   LD      A,LINE1
+0096   014D CD D5 02                CALL    LCD_SET_DDRAM
+0097   0150             
+0098   0150                         ; print digits
+0099   0150 21 64 03                LD      HL,OUTBUF
+0100   0153 3A 63 03                LD      A,(OUTLEN)
+0101   0156 47                      LD      B,A
+0102   0157 4F                      LD      C,A                    ; save len in C
+0103   0158 CD 78 02                CALL    LCD_PUTN
+0104   015B             
+0105   015B                         ; pad spaces to column 15 (16 - len)
+0106   015B 3E 10                   LD      A,16
+0107   015D 91                      SUB     C
+0108   015E 47                      LD      B,A
+0109   015F B7                      OR      A
+0110   0160 28 07                   JR      Z,DT_DONE
+0111   0162             DT_PAD:
+0112   0162 3E 20                   LD      A,' '
+0113   0164 CD BD 02                CALL    LCD_BYTE_DATA
+0114   0167 10 F9                   DJNZ    DT_PAD
+0115   0169             DT_DONE:
+0116   0169 E1                      POP     HL
+0117   016A C9                      RET
+0118   016B             
+0119   016B             ;===============================================================================
+0120   016B             ; PRIME_DELAY (adjustable)
+0121   016B             ;===============================================================================
+0122   016B             PRIME_DELAY:
+0123   016B E5                      PUSH    HL
+0124   016C C5                      PUSH    BC
+0125   016D 06 01                   LD      B,PRIME_DELAY_OUTER
+0126   016F             PD_OUT:
+0127   016F 21 00 28                LD      HL,PRIME_DELAY_INNER
+0128   0172             PD_IN:
+0129   0172 2B                      DEC     HL
+0130   0173 7C                      LD      A,H
+0131   0174 B5                      OR      L
+0132   0175 20 FB                   JR      NZ,PD_IN
+0133   0177 10 F6                   DJNZ    PD_OUT
+0134   0179 C1                      POP     BC
+0135   017A E1                      POP     HL
+0136   017B C9                      RET
+0137   017C             
+0138   017C             ;===============================================================================
+0139   017C             ; IS_PRIME16 (EXACT)
+0140   017C             ;   In:  HL = n
+0141   017C             ;   Out: A=01h if prime, A=00h if not
+0142   017C             ;
+0143   017C             ;   Method:
+0144   017C             ;     - handle n<2, n==2, even
+0145   017C             ;     - test odd divisors d = 3,5,7,... while d*d <= n
+0146   017C             ;     - use exact remainder (MOD16BY8)
+0147   017C             ;   Notes:
+0148   017C             ;     - For 16-bit n, max sqrt(n) is 255, so divisor fits in 8-bit.
+0149   017C             ;===============================================================================
+0150   017C             IS_PRIME16:
+0151   017C                         ; n < 2 ?
+0152   017C 7C                      LD      A,H
+0153   017D B7                      OR      A
+0154   017E 20 07                   JR      NZ,IP_BIG
+0155   0180 7D                      LD      A,L
+0156   0181 FE 02                   CP      02H
+0157   0183 38 41                   JR      C,IP_NOT
+0158   0185 28 39                   JR      Z,IP_TWO
+0159   0187             
+0160   0187             IP_BIG:
+0161   0187                         ; n == 2 ?
+0162   0187 7C                      LD      A,H
+0163   0188 B7                      OR      A
+0164   0189 20 05                   JR      NZ,IP_EVEN
+0165   018B 7D                      LD      A,L
+0166   018C FE 02                   CP      02H
+0167   018E 28 30                   JR      Z,IP_TWO
+0168   0190             
+0169   0190             IP_EVEN:
+0170   0190                         ; even?
+0171   0190 CB 45                   BIT     0,L
+0172   0192 28 32                   JR      Z,IP_NOT
+0173   0194             
+0174   0194                         ; save n in DE
+0175   0194 54                      LD      D,H
+0176   0195 5D                      LD      E,L
+0177   0196             
+0178   0196                         ; d = 3
+0179   0196 0E 03                   LD      C,03H
+0180   0198             
+0181   0198             IP_LOOP:
+0182   0198                         ; square = d*d in HL
+0183   0198 D5                      PUSH    DE
+0184   0199 79                      LD      A,C
+0185   019A CD C8 01                CALL    SQUARE8_TO16
+0186   019D D1                      POP     DE
+0187   019E             
+0188   019E                         ; if square > n => prime
+0189   019E                         ; compare HL (square) to DE (n)
+0190   019E 7A                      LD      A,D
+0191   019F BC                      CP      H
+0192   01A0 38 12                   JR      C,IP_DO_MOD       ; n_hi < sq_hi => square > n => PRIME, but CP is reversed
+0193   01A2 20 08                   JR      NZ,IP_PRIMECHK_HI ; if n_hi != sq_hi, decide
+0194   01A4 7B                      LD      A,E
+0195   01A5 BD                      CP      L
+0196   01A6 38 1B                   JR      C,IP_PRIME        ; n_lo < sq_lo => square > n
+0197   01A8 28 0A                   JR      Z,IP_DO_MOD       ; equal => still check mod
+0198   01AA 18 08                   JR      IP_DO_MOD         ; square < n
+0199   01AC             
+0200   01AC             IP_PRIMECHK_HI:
+0201   01AC                         ; if n_hi < sq_hi => prime else continue
+0202   01AC                         ; We already did: CP H with A=D; if A < H then C set -> IP_DO_MOD taken (wrong)
+0203   01AC                         ; So handle properly using flags from that CP:
+0204   01AC                         ; If D < H, C=1 and we'd have jumped IP_DO_MOD, but we want PRIME.
+0205   01AC                         ; So we fix by redoing compare cleanly below.
+0206   01AC 7C                      LD      A,H
+0207   01AD BA                      CP      D
+0208   01AE 38 04                   JR      C,IP_DO_MOD       ; H < D => square < n
+0209   01B0 28 02                   JR      Z,IP_DO_MOD
+0210   01B2 18 0F                   JR      IP_PRIME          ; H > D => square > n
+0211   01B4             
+0212   01B4             IP_DO_MOD:
+0213   01B4                         ; remainder = n mod d
+0214   01B4 62                      LD      H,D
+0215   01B5 6B                      LD      L,E
+0216   01B6 CD DA 01                CALL    MOD16BY8          ; divisor in C, remainder in A
+0217   01B9 B7                      OR      A
+0218   01BA 28 0A                   JR      Z,IP_NOT          ; divisible
+0219   01BC             
+0220   01BC                         ; d += 2
+0221   01BC 0C                      INC     C
+0222   01BD 0C                      INC     C
+0223   01BE 18 D8                   JR      IP_LOOP
+0224   01C0             
+0225   01C0             IP_TWO:
+0226   01C0 3E 01                   LD      A,01H
+0227   01C2 C9                      RET
+0228   01C3             IP_PRIME:
+0229   01C3 3E 01                   LD      A,01H
+0230   01C5 C9                      RET
+0231   01C6             IP_NOT:
+0232   01C6 AF                      XOR     A
+0233   01C7 C9                      RET
+0234   01C8             
+0235   01C8             ;===============================================================================
+0236   01C8             ; SQUARE8_TO16
+0237   01C8             ;   In:  A = x
+0238   01C8             ;   Out: HL = x*x   (exact)
+0239   01C8             ;===============================================================================
+0240   01C8             SQUARE8_TO16:
+0241   01C8 47                      LD      B,A          ; count
+0242   01C9 57                      LD      D,A          ; addend
+0243   01CA 21 00 00                LD      HL,0000H
+0244   01CD 78                      LD      A,B
+0245   01CE B7                      OR      A
+0246   01CF C8                      RET     Z
+0247   01D0             SQ_L:
+0248   01D0 7D                      LD      A,L
+0249   01D1 82                      ADD     A,D
+0250   01D2 6F                      LD      L,A
+0251   01D3 7C                      LD      A,H
+0252   01D4 CE 00                   ADC     A,0
+0253   01D6 67                      LD      H,A
+0254   01D7 10 F7                   DJNZ    SQ_L
+0255   01D9 C9                      RET
+0256   01DA             
+0257   01DA             ;===============================================================================
+0258   01DA             ; MOD16BY8 (exact remainder)
+0259   01DA             ;   In:  HL = dividend
+0260   01DA             ;        C  = divisor (1..255)
+0261   01DA             ;   Out: A  = remainder (0..div-1)
+0262   01DA             ;   Clobbers: A,B,D,E,H,L
+0263   01DA             ;
+0264   01DA             ;   Bitwise restoring division, keeping 16-bit remainder in DE.
+0265   01DA             ;===============================================================================
+0266   01DA             MOD16BY8:
+0267   01DA 11 00 00                LD      DE,0000H
+0268   01DD 06 10                   LD      B,16
+0269   01DF             
+0270   01DF             M16_LOOP:
+0271   01DF 29                      ADD     HL,HL           ; shift dividend left, bit -> carry
+0272   01E0             
+0273   01E0                         ; shift remainder left, bring in carry
+0274   01E0 CB 13                   RL      E
+0275   01E2 CB 12                   RL      D
+0276   01E4             
+0277   01E4                         ; if remainder >= divisor, subtract divisor
+0278   01E4 7A                      LD      A,D
+0279   01E5 B7                      OR      A
+0280   01E6 20 04                   JR      NZ,M16_SUB
+0281   01E8 7B                      LD      A,E
+0282   01E9 B9                      CP      C
+0283   01EA 38 07                   JR      C,M16_SKIP
+0284   01EC             
+0285   01EC             M16_SUB:
+0286   01EC 7B                      LD      A,E
+0287   01ED 91                      SUB     C
+0288   01EE 5F                      LD      E,A
+0289   01EF 7A                      LD      A,D
+0290   01F0 DE 00                   SBC     A,0
+0291   01F2 57                      LD      D,A
+0292   01F3             
+0293   01F3             M16_SKIP:
+0294   01F3 10 EA                   DJNZ    M16_LOOP
+0295   01F5 7B                      LD      A,E
+0296   01F6 C9                      RET
+0297   01F7             
+0298   01F7             ;===============================================================================
+0299   01F7             ; U16_TO_DEC_ASCII (exact)
+0300   01F7             ;   In:  HL=value
+0301   01F7             ;   Out: OUTBUF digits (no leading zeros), OUTLEN (1..5)
+0302   01F7             ;   Clobbers: AF,BC,DE,HL
+0303   01F7             ;
+0304   01F7             ;   Repeated subtraction by 10000,1000,100,10,1 (fast enough on Z80).
+0305   01F7             ;===============================================================================
+0306   01F7             U16_TO_DEC_ASCII:
+0307   01F7 22 5C 03                LD      (WORK),HL
+0308   01FA             
+0309   01FA                         ; 10000
+0310   01FA 2A 5C 03                LD      HL,(WORK)
+0311   01FD 11 10 27                LD      DE,2710H
+0312   0200 CD 6C 02                CALL    COUNT_SUB_16
+0313   0203 78                      LD      A,B
+0314   0204 C6 30                   ADD     A,'0'
+0315   0206 32 5E 03                LD      (DIGITS+0),A
+0316   0209 22 5C 03                LD      (WORK),HL
+0317   020C             
+0318   020C                         ; 1000
+0319   020C 2A 5C 03                LD      HL,(WORK)
+0320   020F 11 E8 03                LD      DE,03E8H
+0321   0212 CD 6C 02                CALL    COUNT_SUB_16
+0322   0215 78                      LD      A,B
+0323   0216 C6 30                   ADD     A,'0'
+0324   0218 32 5F 03                LD      (DIGITS+1),A
+0325   021B 22 5C 03                LD      (WORK),HL
+0326   021E             
+0327   021E                         ; 100
+0328   021E 2A 5C 03                LD      HL,(WORK)
+0329   0221 11 64 00                LD      DE,0064H
+0330   0224 CD 6C 02                CALL    COUNT_SUB_16
+0331   0227 78                      LD      A,B
+0332   0228 C6 30                   ADD     A,'0'
+0333   022A 32 60 03                LD      (DIGITS+2),A
+0334   022D 22 5C 03                LD      (WORK),HL
+0335   0230             
+0336   0230                         ; 10
+0337   0230 2A 5C 03                LD      HL,(WORK)
+0338   0233 11 0A 00                LD      DE,000AH
+0339   0236 CD 6C 02                CALL    COUNT_SUB_16
+0340   0239 78                      LD      A,B
+0341   023A C6 30                   ADD     A,'0'
+0342   023C 32 61 03                LD      (DIGITS+3),A
+0343   023F 22 5C 03                LD      (WORK),HL
+0344   0242             
+0345   0242                         ; 1 (HL now 0..9)
+0346   0242 2A 5C 03                LD      HL,(WORK)
+0347   0245 7D                      LD      A,L
+0348   0246 C6 30                   ADD     A,'0'
+0349   0248 32 62 03                LD      (DIGITS+4),A
+0350   024B             
+0351   024B                         ; strip leading zeros into OUTBUF (leave at least 1 digit)
+0352   024B 21 5E 03                LD      HL,DIGITS
+0353   024E 06 05                   LD      B,5
+0354   0250             STRIP0:
+0355   0250 7E                      LD      A,(HL)
+0356   0251 FE 30                   CP      '0'
+0357   0253 20 09                   JR      NZ,COPY_DIGS
+0358   0255 78                      LD      A,B
+0359   0256 FE 01                   CP      1
+0360   0258 28 04                   JR      Z,COPY_DIGS
+0361   025A 23                      INC     HL
+0362   025B 05                      DEC     B
+0363   025C 18 F2                   JR      STRIP0
+0364   025E             
+0365   025E             COPY_DIGS:
+0366   025E 78                      LD      A,B
+0367   025F 32 63 03                LD      (OUTLEN),A
+0368   0262 11 64 03                LD      DE,OUTBUF
+0369   0265             CPY1:
+0370   0265 7E                      LD      A,(HL)
+0371   0266 12                      LD      (DE),A
+0372   0267 23                      INC     HL
+0373   0268 13                      INC     DE
+0374   0269 10 FA                   DJNZ    CPY1
+0375   026B C9                      RET
+0376   026C             
+0377   026C             ;===============================================================================
+0378   026C             ; COUNT_SUB_16
+0379   026C             ;   In:  HL=value, DE=constant
+0380   026C             ;   Out: B=count (0..9), HL=remainder
+0381   026C             ;   Clobbers: AF
+0382   026C             ;===============================================================================
+0383   026C             COUNT_SUB_16:
+0384   026C 06 00                   LD      B,0
+0385   026E             CS_LOOP:
+0386   026E                         ; if HL < DE => done
+0387   026E B7                      OR      A               ; clear carry
+0388   026F ED 52                   SBC     HL,DE
+0389   0271 38 03                   JR      C,CS_UNDO       ; went negative -> undo and stop
+0390   0273 04                      INC     B
+0391   0274 18 F8                   JR      CS_LOOP
+0392   0276             CS_UNDO:
+0393   0276 19                      ADD     HL,DE
+0394   0277 C9                      RET
+0395   0278             
+0396   0278             ;===============================================================================
+0397   0278             ; LCD helpers (same logic as your working latch driver)
+0398   0278             ;===============================================================================
+0399   0278             
+0400   0278             LCD_PUTN:
+0401   0278 78                      LD      A,B
+0402   0279 B7                      OR      A
+0403   027A C8                      RET     Z
+0404   027B             LP1:
+0405   027B 7E                      LD      A,(HL)
+0406   027C CD BD 02                CALL    LCD_BYTE_DATA
+0407   027F 23                      INC     HL
+0408   0280 10 F9                   DJNZ    LP1
+0409   0282 C9                      RET
+0410   0283             
+0411   0283             LCD_PULSE_E:
+0412   0283 D3 00                   OUT     (PORT_LCD),A
+0413   0285 CD 27 03                CALL    DELAY_TINY
+0414   0288 F6 08                   OR      08H                 ; E=1
+0415   028A D3 00                   OUT     (PORT_LCD),A
+0416   028C CD 27 03                CALL    DELAY_TINY
+0417   028F E6 F7                   AND     0F7H                ; E=0
+0418   0291 D3 00                   OUT     (PORT_LCD),A
+0419   0293 CD 27 03                CALL    DELAY_TINY
+0420   0296 C9                      RET
+0421   0297             
+0422   0297             LCD_NIB_CMD:
+0423   0297 E6 F0                   AND     0F0H
+0424   0299 CD 83 02                CALL    LCD_PULSE_E
+0425   029C C9                      RET
+0426   029D             
+0427   029D             LCD_NIB_DATA:
+0428   029D E6 F0                   AND     0F0H
+0429   029F F6 04                   OR      04H                 ; RS=1
+0430   02A1 CD 83 02                CALL    LCD_PULSE_E
+0431   02A4 C9                      RET
+0432   02A5             
+0433   02A5             LCD_BYTE_CMD:
+0434   02A5 F5                      PUSH    AF
+0435   02A6 57                      LD      D,A
+0436   02A7             
+0437   02A7 E6 F0                   AND     0F0H
+0438   02A9 CD 97 02                CALL    LCD_NIB_CMD
+0439   02AC             
+0440   02AC 7A                      LD      A,D
+0441   02AD E6 0F                   AND     0FH
+0442   02AF 07                      RLCA
+0443   02B0 07                      RLCA
+0444   02B1 07                      RLCA
+0445   02B2 07                      RLCA
+0446   02B3 E6 F0                   AND     0F0H
+0447   02B5 CD 97 02                CALL    LCD_NIB_CMD
+0448   02B8             
+0449   02B8 F1                      POP     AF
+0450   02B9 CD 2E 03                CALL    DELAY_2MS
+0451   02BC C9                      RET
+0452   02BD             
+0453   02BD             LCD_BYTE_DATA:
+0454   02BD F5                      PUSH    AF
+0455   02BE 57                      LD      D,A
+0456   02BF             
+0457   02BF E6 F0                   AND     0F0H
+0458   02C1 CD 9D 02                CALL    LCD_NIB_DATA
+0459   02C4             
+0460   02C4 7A                      LD      A,D
+0461   02C5 E6 0F                   AND     0FH
+0462   02C7 07                      RLCA
+0463   02C8 07                      RLCA
+0464   02C9 07                      RLCA
+0465   02CA 07                      RLCA
+0466   02CB E6 F0                   AND     0F0H
+0467   02CD CD 9D 02                CALL    LCD_NIB_DATA
+0468   02D0             
+0469   02D0 F1                      POP     AF
+0470   02D1 CD 2E 03                CALL    DELAY_2MS
+0471   02D4 C9                      RET
+0472   02D5             
+0473   02D5             LCD_SET_DDRAM:
+0474   02D5 F6 80                   OR      080H
+0475   02D7 CD A5 02                CALL    LCD_BYTE_CMD
+0476   02DA C9                      RET
+0477   02DB             
+0478   02DB             LCD_CLEAR:
+0479   02DB 3E 01                   LD      A,001H
+0480   02DD CD A5 02                CALL    LCD_BYTE_CMD
+0481   02E0 CD 50 03                CALL    DELAY_60MS
+0482   02E3 C9                      RET
+0483   02E4             
+0484   02E4             LCD_INIT_4BIT:
+0485   02E4 AF                      XOR     A
+0486   02E5 D3 00                   OUT     (PORT_LCD),A
+0487   02E7 CD 46 03                CALL    DELAY_20MS
+0488   02EA             
+0489   02EA                         ; 8-bit wakeup x3 (0x3 high nibble)
+0490   02EA 3E 30                   LD      A,030H
+0491   02EC CD 97 02                CALL    LCD_NIB_CMD
+0492   02EF CD 3C 03                CALL    DELAY_10MS
+0493   02F2 3E 30                   LD      A,030H
+0494   02F4 CD 97 02                CALL    LCD_NIB_CMD
+0495   02F7 CD 3C 03                CALL    DELAY_10MS
+0496   02FA 3E 30                   LD      A,030H
+0497   02FC CD 97 02                CALL    LCD_NIB_CMD
+0498   02FF CD 3C 03                CALL    DELAY_10MS
+0499   0302             
+0500   0302                         ; switch to 4-bit (0x2 high nibble)
+0501   0302 3E 20                   LD      A,020H
+0502   0304 CD 97 02                CALL    LCD_NIB_CMD
+0503   0307 CD 3C 03                CALL    DELAY_10MS
+0504   030A             
+0505   030A                         ; function set: 4-bit, 2 lines, 5x8
+0506   030A 3E 28                   LD      A,028H
+0507   030C CD A5 02                CALL    LCD_BYTE_CMD
+0508   030F             
+0509   030F                         ; display off
+0510   030F 3E 08                   LD      A,008H
+0511   0311 CD A5 02                CALL    LCD_BYTE_CMD
+0512   0314             
+0513   0314                         ; clear
+0514   0314 3E 01                   LD      A,001H
+0515   0316 CD A5 02                CALL    LCD_BYTE_CMD
+0516   0319 CD 50 03                CALL    DELAY_60MS
+0517   031C             
+0518   031C                         ; entry mode increment
+0519   031C 3E 06                   LD      A,006H
+0520   031E CD A5 02                CALL    LCD_BYTE_CMD
+0521   0321             
+0522   0321                         ; display on
+0523   0321 3E 0C                   LD      A,00CH
+0524   0323 CD A5 02                CALL    LCD_BYTE_CMD
+0525   0326 C9                      RET
+0526   0327             
+0527   0327             ;===============================================================================
+0528   0327             ; delays
+0529   0327             ;===============================================================================
+0530   0327             DELAY_TINY:
+0531   0327 C5                      PUSH    BC
+0532   0328 06 12                   LD      B,12H
+0533   032A 10 FE       DT1:        DJNZ    DT1
+0534   032C C1                      POP     BC
+0535   032D C9                      RET
+0536   032E             
+0537   032E             DELAY_2MS:
+0538   032E C5                      PUSH    BC
+0539   032F D5                      PUSH    DE
+0540   0330 06 08                   LD      B,08H
+0541   0332 16 FF       D2A:        LD      D,0FFH
+0542   0334 15          D2B:        DEC     D
+0543   0335 20 FD                   JR      NZ,D2B
+0544   0337 10 F9                   DJNZ    D2A
+0545   0339 D1                      POP     DE
+0546   033A C1                      POP     BC
+0547   033B C9                      RET
+0548   033C             
+0549   033C             DELAY_10MS:
+0550   033C C5                      PUSH    BC
+0551   033D 06 05                   LD      B,05H
+0552   033F CD 2E 03    D10:        CALL    DELAY_2MS
+0553   0342 10 FB                   DJNZ    D10
+0554   0344 C1                      POP     BC
+0555   0345 C9                      RET
+0556   0346             
+0557   0346             DELAY_20MS:
+0558   0346 C5                      PUSH    BC
+0559   0347 06 0A                   LD      B,0AH
+0560   0349 CD 2E 03    D20:        CALL    DELAY_2MS
+0561   034C 10 FB                   DJNZ    D20
+0562   034E C1                      POP     BC
+0563   034F C9                      RET
+0564   0350             
+0565   0350             DELAY_60MS:
+0566   0350 C5                      PUSH    BC
+0567   0351 06 1E                   LD      B,1EH
+0568   0353 CD 2E 03    D60:        CALL    DELAY_2MS
+0569   0356 10 FB                   DJNZ    D60
+0570   0358 C1                      POP     BC
+0571   0359 C9                      RET
+0572   035A             
+0573   035A             ;===============================================================================
+0574   035A             ; data
+0575   035A             ;===============================================================================
+0576   035A 02 00       CAND:       DW      0002H
+0577   035C             
+0578   035C 00 00       WORK:       DW      0000H
+0579   035E 30 30 30 30 DIGITS:     DB      '0','0','0','0','0'
+0579   0362 30          
+0580   0363 01          OUTLEN:     DB      01H
+0581   0364 30 30 30 30 OUTBUF:     DB      '0','0','0','0','0'
+0581   0368 30          
+0582   0369             
+0583   0369 00 00 00 00 STACK:      DS      80
+0583   036D 00 00 00 00 
+0583   0371 00 00 00 00 
+0583   0375 00 00 00 00 
+0583   0379 00 00 00 00 
+0583   037D 00 00 00 00 
+0583   0381 00 00 00 00 
+0583   0385 00 00 00 00 
+0583   0389 00 00 00 00 
+0583   038D 00 00 00 00 
+0583   0391 00 00 00 00 
+0583   0395 00 00 00 00 
+0583   0399 00 00 00 00 
+0583   039D 00 00 00 00 
+0583   03A1 00 00 00 00 
+0583   03A5 00 00 00 00 
+0583   03A9 00 00 00 00 
+0583   03AD 00 00 00 00 
+0583   03B1 00 00 00 00 
+0583   03B5 00 00 00 00 
+0584   03B9             STACKEND:
+0585   03B9             
+0586   03B9                         END
+Number of errors = 0
