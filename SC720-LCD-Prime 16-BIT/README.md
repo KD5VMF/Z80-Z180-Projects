@@ -16,7 +16,6 @@ using your SC719/SC720-style **4-bit HD44780 LCD latch** interface.
 ```
 src/LCDPRIME.ASM     Source
 hex/LCDPRIME.HEX     Intel HEX image
-bin/LCDPRIME.COM     Flat binary extracted from the HEX (CP/M .COM style)
 tools/ihex_to_com.py HEX -> COM converter (optional)
 docs/HARDWARE.md     LCD latch mapping notes
 ```
