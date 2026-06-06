@@ -1,0 +1,26 @@
+HWTTERM3S build steps
+=====================
+
+1. Copy or paste HWTTERM3S.ASM onto the CP/M disk.
+
+2. Assemble:
+
+   ASM HWTTERM3S
+
+3. If ASM finishes with no U/E/O errors, convert HEX to COM:
+
+   LOAD HWTTERM3S
+
+4. Run:
+
+   HWTTERM3S
+
+5. Controls while running:
+
+   Q   exit to CP/M
+   R   reset max G and max magnetic readings
+   0-7 change RomWBW HBIOS serial unit
+
+6. If the program receives no sensor packets, try another HBIOS serial unit by pressing 0 through 7.
+
+7. The program expects the HWT905D TTL sensor at 9600 8N1.

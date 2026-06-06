@@ -1,0 +1,24 @@
+HWT905D TTL wiring
+==================
+
+Use the TTL version of the HWT905D sensor for direct connection to TTL serial headers.
+Do not connect an RS-232 level sensor directly to a TTL serial header.
+
+Typical HWT905D TTL wiring:
+
+  HWT905D red/yellow power lead  -> +5V or sensor-rated VCC
+  HWT905D black                  -> GND
+  HWT905D TX                     -> board serial RX
+  HWT905D RX                     -> board serial TX, optional for config
+
+For this program, only sensor TX to board RX is required for data display.
+The sensor RX wire is only needed if you want to send configuration commands to the sensor.
+
+Serial settings used by the program:
+
+  9600 baud
+  8 data bits
+  no parity
+  1 stop bit
+
+This project was tested on Small Computer Central SC131 using RomWBW SCZ180_sc131_std with a Z8S180-K at 18.432 MHz.
