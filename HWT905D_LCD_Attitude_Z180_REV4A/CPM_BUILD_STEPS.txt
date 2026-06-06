@@ -1,0 +1,24 @@
+HWTLCD4A CP/M Build Steps
+=========================
+
+1. Put HWTLCD4A.ASM on your CP/M drive.
+
+2. Assemble:
+
+   ASM HWTLCD4A
+
+3. If assembly is clean, convert HEX to COM:
+
+   LOAD HWTLCD4A
+
+4. Run:
+
+   HWTLCD4A
+
+Good ASM output has no U/E/O errors. Example:
+
+   06xx
+   005H USE FACTOR
+   END OF ASSEMBLY
+
+The USE FACTOR line is normal. Do not worry about it.

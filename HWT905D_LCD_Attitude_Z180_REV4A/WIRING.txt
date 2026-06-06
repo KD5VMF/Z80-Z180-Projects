@@ -1,0 +1,53 @@
+HWT905D / LCD1602 Wiring Notes
+==============================
+
+Sensor
+------
+
+Use the HWT905D TTL serial version for direct connection to the board serial header.
+
+Typical HWT905D TTL wiring:
+
+   Red    -> +5V
+   Black  -> GND
+   Yellow -> board RX
+   Green  -> board TX, optional
+
+The project only needs to read from the sensor, so Yellow/TX from the sensor into board RX is the important data line.
+
+Serial Settings
+---------------
+
+   9600 baud
+   8 data bits
+   No parity
+   1 stop bit
+
+The program initializes the selected RomWBW HBIOS serial unit to 9600 8N1.
+
+LCD1602
+-------
+
+LCD is connected through the SC719-style LCD port.
+
+Program LCD port:
+
+   PORTLD EQU 000H
+
+LCD bit mapping:
+
+   bit 2 = RS
+   bit 3 = E
+   bit 4 = D4
+   bit 5 = D5
+   bit 6 = D6
+   bit 7 = D7
+   R/W tied to GND
+
+Observed Working Behavior
+-------------------------
+
+   Lift sensor/nose up     -> P+
+   Lower sensor/nose down  -> P-
+   Tilt left               -> R+
+   Tilt right              -> R-
