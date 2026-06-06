@@ -1,0 +1,28 @@
+HWT905D TERMINAL IMU DISPLAY - CP/M BUILD STEPS
+================================================
+
+File to build:
+  HWTTERM1.ASM
+
+Commands:
+  ASM HWTTERM1
+  LOAD HWTTERM1
+  HWTTERM1
+
+Expected successful ASM output:
+  END OF ASSEMBLY
+
+Bad ASM output includes letters at the left such as:
+  U  undefined symbol
+  E  expression/syntax error
+  O  operand/object error
+
+This source is made for CP/M ASM.COM and LOAD.COM.
+It is 8080-style assembly that runs on Z80/Z180 systems.
+
+Tested system:
+  Small Computer Central SC131
+  RomWBW config: SCZ180_sc131_std
+  CPU: Z8S180-K @ 18.432 MHz
+  OS: Z-System / ZSDOS / RomWBW CBIOS
+

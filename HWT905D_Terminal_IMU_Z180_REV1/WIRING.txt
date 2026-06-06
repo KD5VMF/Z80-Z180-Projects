@@ -1,0 +1,27 @@
+HWT905D TERMINAL IMU DISPLAY - WIRING
+=====================================
+
+This terminal-only version does not use LCD or LED hardware.
+
+Required:
+  HWT905D TTL serial IMU
+  Z80/Z180 RomWBW system serial port available as an HBIOS serial unit
+
+HWT905D TTL wiring:
+  HWT905D VCC / red      -> +5V or proper sensor supply
+  HWT905D GND / black    -> system ground
+  HWT905D TX / yellow    -> board serial RX
+  HWT905D RX / green     -> board serial TX, optional unless configuring sensor
+
+For read-only display, the important wire is:
+  sensor TX -> board RX
+
+Do not connect an RS-232-level sensor directly to a TTL serial header.
+This project was tested with a TTL HWT905D sensor.
+
+LCD/LED hardware:
+  Not used.
+  Port 00H LCD output removed.
+  Port 01H pitch LED output removed.
+  Port 02H roll LED output removed.
+
