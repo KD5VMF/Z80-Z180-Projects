@@ -1,0 +1,29 @@
+HWTCHS3 CP/M BUILD STEPS
+========================
+
+1. Copy HWTCHS3.ASM to your CP/M drive.
+
+2. Assemble it:
+
+   C>ASM HWTCHS3
+
+3. Convert HEX to COM:
+
+   C>LOAD HWTCHS3
+
+4. Run it:
+
+   C>HWTCHS3
+
+Controls while running:
+
+   Q  Quit back to CP/M
+   +  Faster
+   -  Slower
+
+Notes:
+
+- This is designed for CP/M ASM.COM style use.
+- The source avoids OUT instructions and direct board hardware writes.
+- Output is through BDOS console calls and ANSI escape sequences.
+- A terminal with ANSI color support is recommended.
