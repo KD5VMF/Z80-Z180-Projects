@@ -1,0 +1,39 @@
+# Wiring
+
+## HWT905D TTL to Z180 serial Port B
+
+Use the TTL version of the HWT905D sensor. Do not use the RS-232 or RS-485 version directly on the TTL serial header.
+
+Typical HWT905D TTL wire colors:
+
+```text
+Red     -> +5V
+Black   -> GND
+Yellow  -> board RX / serial Port B receive
+Green   -> board TX / serial Port B transmit, optional
+```
+
+For this project the board only needs to receive data from the sensor. The sensor RX/green wire is only needed if you later want to send configuration commands.
+
+## LCD1602 / SC719-style interface
+
+The program uses LCD output latch port `00H`.
+
+```text
+PORT 00H bit 2 = LCD RS
+PORT 00H bit 3 = LCD E
+PORT 00H bit 4 = LCD D4
+PORT 00H bit 5 = LCD D5
+PORT 00H bit 6 = LCD D6
+PORT 00H bit 7 = LCD D7
+LCD R/W        = GND
+```
+
+## LED I/O board
+
+```text
+I/O port 01H = pitch LED output
+I/O port 02H = roll LED output
+```
+
+The LED output is an 8-bit pattern. The program assumes lower bits are left/negative and higher bits are right/positive. If your LED board is physically reversed, swap the constants in `MKNEG` and `MKPOS` in the source.

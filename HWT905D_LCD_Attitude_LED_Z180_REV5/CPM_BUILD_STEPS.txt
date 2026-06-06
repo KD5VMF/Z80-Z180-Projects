@@ -1,0 +1,30 @@
+# CP/M Build Steps
+
+Copy `HWTLCD5.ASM` to the target CP/M drive.
+
+Then run:
+
+```text
+ASM HWTLCD5
+LOAD HWTLCD5
+HWTLCD5
+```
+
+A good assembly looks like this:
+
+```text
+CP/M ASSEMBLER - VER 2.0
+xxxx
+005H USE FACTOR
+END OF ASSEMBLY
+```
+
+Bad assembly output shows error letters at the left, such as:
+
+```text
+U = undefined symbol
+E = expression/syntax issue
+O = object/operand issue
+```
+
+Only run `LOAD HWTLCD5` after `ASM HWTLCD5` finishes without those error letters.
