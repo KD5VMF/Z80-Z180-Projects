@@ -1,0 +1,46 @@
+HWTLINK37 BUILD AND RUN
+=======================
+
+FILES
+-----
+HWTWRK37.ASM  Worker, run first
+HWTCTL37.ASM  Controller, run second
+
+BUILD ON CP/M
+-------------
+ASM HWTWRK37
+LOAD HWTWRK37
+
+ASM HWTCTL37
+LOAD HWTCTL37
+
+RUN ORDER
+---------
+1. Run HWTWRK37 first.
+2. Run HWTCTL37 second.
+
+HARDWARE
+--------
+Port A on each system goes to its own Tera Term console.
+Port B connects the two systems with three wires only:
+
+LEFT TXB -> RIGHT RXB
+LEFT RXB -> RIGHT TXB
+GND      -> GND
+
+No 5V between boards.
+No RTS/CTS.
+
+PURPOSE
+-------
+Controller sends A and B.
+Worker computes A^2 + B^2 = C^2.
+Worker sends C^2 back.
+Controller verifies and sends OK/FAIL.
+Repeats forever.
+
+TERMINAL ONLY
+-------------
+No LCD.
+No LED I/O.
+No OUT DAH.
