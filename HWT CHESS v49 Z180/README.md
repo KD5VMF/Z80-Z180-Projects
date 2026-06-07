@@ -1,4 +1,4 @@
-# HWTCHESS49 - Two Real Z180 Computers Playing Chess Over Port B
+# HWTCHESS49 - Two Real Z180 Computers Playing Chess Over Port B           (I have tested this with the Z80 vs the Z180 and it works fine. It is slower of course but neat!)
 
 HWTCHESS49 is a **two-computer, computer-vs-computer chess demonstration** for **Small Computer Central Z180 RomWBW CP/M systems**.
 
