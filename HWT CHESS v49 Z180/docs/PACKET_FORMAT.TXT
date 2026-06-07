@@ -1,0 +1,11 @@
+HWTCHESS49 packet format
+
+Byte 0: 55h
+Byte 1: AAh
+Byte 2: Type: M=move, N=new game
+Byte 3: Sequence number
+Byte 4: From square index, 00h..3Fh
+Byte 5: To square index, 00h..3Fh
+Byte 6: Piece byte
+Byte 7: Board XOR/check byte
+Byte 8: XOR checksum of bytes 0..7
