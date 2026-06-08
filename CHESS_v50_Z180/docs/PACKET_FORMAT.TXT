@@ -1,0 +1,25 @@
+CHESS50 PACKET FORMAT
+
+Each side sends a small fixed chess status packet over Port B.
+Bytes are simple 8-bit values. The packet carries the move and a
+check byte so the other machine can stay synchronized.
+
+Packet length: 9 bytes
+
+01  55h start marker
+02  AAh start marker
+03  packet type: M move, N new game, R ready
+04  sequence/unit byte
+05  move from square
+06  move to square
+07  moving piece
+08  checksum sent by sender
+09  local calculated/transmit check byte
+
+Board square numbering is 0 to 63.
+Square 0 is the top-left display square.
+Square 63 is the bottom-right display square.
+
+Port B wiring is null modem only:
+TXB to RXB, RXB to TXB, and GND to GND.
+Do not connect 5V. Hardware flow control is not used.
