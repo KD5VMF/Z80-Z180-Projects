@@ -1,6 +1,6 @@
 # CHESS v50 Z180
 
-CHESS v50 Z180 is a two-computer CP/M chess display and self-play project for Small Computer Central Z180 RomWBW systems. One Z180 runs the Black player, the other Z180 runs the White player, and the two machines communicate over Port B using a three-wire null-modem serial link. (Tested with the a80 vs z180 and works fine on the both, just slower on the z80 systems.)
+CHESS v50 Z180 is a two-computer CP/M chess display and self-play project for Small Computer Central Z180 RomWBW systems. One Z180 runs the Black player, the other Z180 runs the White player, and the two machines communicate over Port B using a three-wire null-modem serial link. (Tested with the z80 vs z180 and works fine on the both, just slower on the z80 systems.)
 
 This final repo uses chess-only names. The old sensor-project prefix has been removed from the folder name, source filenames, build instructions, documents, and on-screen title bars.
 
