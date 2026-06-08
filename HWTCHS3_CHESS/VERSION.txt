@@ -1,2 +1,0 @@
-HWTCHS3
-CP/M 8080-safe ANSI computer-vs-computer chess self-play display
