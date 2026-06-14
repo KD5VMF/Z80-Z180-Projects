@@ -1,0 +1,15 @@
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\Assets\TMSAsmBuilder.ico
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\TMSAsmBuilder.exe
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\TMSAsmBuilder.deps.json
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\TMSAsmBuilder.runtimeconfig.json
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\TMSAsmBuilder.dll
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\bin\Debug\net8.0-windows\TMSAsmBuilder.pdb
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.AssemblyInfoInputs.cache
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.AssemblyInfo.cs
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.csproj.CoreCompileInputs.cache
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.dll
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\refint\TMSAsmBuilder.dll
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.pdb
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\TMSAsmBuilder.genruntimeconfig.cache
+C:\Users\kd5vm\Downloads\TMSAsmBuilder-SC720-TMSEMU3_GITHUB_REPO\TMSAsmBuilder-SC720-TMSEMU3\TMSAsmBuilder\obj\Debug\net8.0-windows\ref\TMSAsmBuilder.dll
