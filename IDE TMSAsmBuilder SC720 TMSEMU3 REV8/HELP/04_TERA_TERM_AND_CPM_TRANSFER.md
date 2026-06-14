@@ -38,22 +38,24 @@ If a machine still misses characters, increase the delay slightly.
 
 ---
 
-## Method A: Copy HEX from the IDE and use PIP
+## Copy HEX from the IDE and use PIP
 
 This is the main recommended method.
 
 ### On CP/M
 
-For the Balls demo:
+Use the name of the program you are transferring.
+
+Example:
 
 ```text
-C>PIP BALLS.HEX=CON:
+C>PIP FILENAME.HEX=CON:
 ```
 
 CP/M is now accepting text from the console and saving it into:
 
 ```text
-BALLS.HEX
+FILENAME.HEX
 ```
 
 ### In the IDE
@@ -84,22 +86,24 @@ You should return to the CP/M prompt.
 
 ## Convert HEX to COM
 
-After the HEX file is saved, use CP/M `LOAD`:
+After the HEX file is saved, use CP/M `LOAD`.
+
+Example:
 
 ```text
-C>LOAD BALLS
+C>LOAD FILENAME
 ```
 
 This reads:
 
 ```text
-BALLS.HEX
+FILENAME.HEX
 ```
 
 and creates:
 
 ```text
-BALLS.COM
+FILENAME.COM
 ```
 
 ---
@@ -107,22 +111,22 @@ BALLS.COM
 ## Run the program
 
 ```text
-C>BALLS
+C>FILENAME
 ```
 
 ---
 
-## Method B: Use ED to create or edit the HEX file
+## Using ED instead of PIP
 
-You can also use CP/M `ED` to create the HEX file manually.
+You can also use CP/M `ED` to create or edit the HEX file manually.
 
 Start ED with:
 
 ```text
-C>ED BALLS.HEX
+C>ED FILENAME.HEX
 ```
 
-Then enter insert mode:
+Enter insert mode:
 
 ```text
 I
@@ -145,13 +149,13 @@ E
 Now convert the file with:
 
 ```text
-C>LOAD BALLS
+C>LOAD FILENAME
 ```
 
 Then run it:
 
 ```text
-C>BALLS
+C>FILENAME
 ```
 
 ---
@@ -167,26 +171,77 @@ C>DIR
 Delete old output:
 
 ```text
-C>ERA BALLS.COM
-C>ERA BALLS.HEX
+C>ERA FILENAME.COM
+C>ERA FILENAME.HEX
 ```
 
 Capture HEX text from the console:
 
 ```text
-C>PIP BALLS.HEX=CON:
+C>PIP FILENAME.HEX=CON:
 ```
 
 Convert Intel HEX to COM:
 
 ```text
-C>LOAD BALLS
+C>LOAD FILENAME
 ```
 
 Run program:
 
 ```text
-C>BALLS
+C>FILENAME
+```
+
+---
+
+## CP/M filename note
+
+CP/M normally uses short 8.3 filenames.
+
+That means:
+
+```text
+NAME.EXT
+```
+
+Examples:
+
+```text
+TEST.HEX
+DEMO.HEX
+CLOCK.HEX
+PONG.HEX
+```
+
+For Intel HEX transfer, the file should end in:
+
+```text
+.HEX
+```
+
+After `LOAD`, CP/M creates the matching:
+
+```text
+.COM
+```
+
+So:
+
+```text
+PONG.HEX
+```
+
+becomes:
+
+```text
+PONG.COM
+```
+
+and runs with:
+
+```text
+C>PONG
 ```
 
 ---
