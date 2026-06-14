@@ -1,0 +1,39 @@
+TMS ASM Builder IDE for SC720 / TMSEMU3 - GitHub Repo Edition
+
+Main files:
+- README.md
+- LICENSE
+- NOTICE.md
+- CHANGELOG.md
+- CONTRIBUTING.md
+- .gitignore
+- .gitattributes
+- run_gui.bat
+- build_gui.bat
+- publish_portable.bat
+- get_jblang_examples.ps1
+
+Docs:
+- docs/BUILD_AND_RUN.md
+- docs/TRANSFER_TO_CPM.md
+- docs/TOOLS_AND_CREDITS.md
+- docs/INTEL_HEX_NOTES.md
+- docs/GITHUB_SETUP.md
+- docs/TROUBLESHOOTING.md
+
+Source:
+- TMSAsmBuilder/TMSAsmBuilder.csproj
+- TMSAsmBuilder/Program.cs
+- TMSAsmBuilder/MainForm.cs
+
+Support folders:
+- TMSAsmBuilder/Assets
+- TMSAsmBuilder/Libs
+- TMSAsmBuilder/Tools
+- TMSAsmBuilder/Templates
+- TMSAsmBuilder/Work
+- TMSAsmBuilder/Out
+- TMSAsmBuilder/Builds
+
+GitHub Actions:
+- .github/workflows/dotnet-windows.yml
