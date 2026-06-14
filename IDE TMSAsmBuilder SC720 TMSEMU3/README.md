@@ -1,6 +1,6 @@
 # TMS ASM Builder IDE for SC720 / TMSEMU3
 
-A friendly Windows IDE and build tool for making **Z80 / Z180 CP/M `.COM` programs** that use the **TMS9918A / TMSEMU3 video card** on Small Computer Central / RC2014-style systems.
+A friendly Windows IDE and build tool for making **Z80 / Z180 CP/M `.COM` programs** that use the **TMS9918A / TMSEMU3 video card** on Small Computer Central / RC2014-style systems or compatible.
 
 This repo is set up to be easy to share: the Windows IDE source, the assembler tool, the support ASM libraries, the **BALL** sprite demo, docs, and batch files are all included.
 
