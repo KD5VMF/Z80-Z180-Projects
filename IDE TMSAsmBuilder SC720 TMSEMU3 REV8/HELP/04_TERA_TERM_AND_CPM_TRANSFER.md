@@ -1,61 +1,60 @@
-# Tera Term and CP/M transfer guide
+# Tera Term and CP/M HEX Transfer Guide
 
-This IDE gives you two ways to move a program to CP/M:
+This IDE moves programs to CP/M by copying the generated Intel HEX text and sending it through Tera Term.
 
-1. Send the `.COM` file directly with XMODEM.
-2. Paste/send the `.HEX` file as text, then use CP/M `LOAD`.
+The normal workflow is:
 
-## Method A: XMODEM `.COM` transfer
+1. Build the program in the IDE.
+2. Open the **HEX Paste** tab.
+3. Click **Copy HEX**.
+4. Use CP/M `PIP` to capture the pasted HEX text.
+5. Use CP/M `LOAD` to convert the HEX file into a `.COM` program.
+6. Run the program.
 
-This is best when `XM.COM` or a compatible XMODEM receive program is available on CP/M.
+---
+
+## Recommended Tera Term setup
+
+Before pasting HEX text into CP/M, set Tera Term transmit delays.
+
+In Tera Term:
+
+```text
+Setup -> Serial port
+```
+
+Set both transmit delay values to:
+
+```text
+1 ms/char
+1 ms/line
+```
+
+This is very important.
+
+The SC720/Z80/Z180 CP/M system can miss characters if the HEX text is pasted too fast. The 1 ms delay gives CP/M enough time to receive and write the text correctly.
+
+If a machine still misses characters, increase the delay slightly.
+
+---
+
+## Method A: Copy HEX from the IDE and use PIP
+
+This is the main recommended method.
 
 ### On CP/M
 
 For the Balls demo:
 
 ```text
-C>XM R BALLS.COM
-```
-
-The CP/M machine now waits for a file.
-
-### In Tera Term
-
-Use:
-
-```text
-File -> Transfer -> XMODEM -> Send...
-```
-
-Pick:
-
-```text
-TMSAsmBuilder/Out/BALLS.COM
-```
-
-or, if using the portable app folder:
-
-```text
-Portable_Windows_App/Out/BALLS.COM
-```
-
-### Run it
-
-```text
-C>BALLS
-```
-
-## Method B: Paste/send Intel HEX with PIP and LOAD
-
-This is useful if XMODEM is not working yet.
-
-### On CP/M
-
-```text
 C>PIP BALLS.HEX=CON:
 ```
 
-CP/M is now accepting text from the console into `BALLS.HEX`.
+CP/M is now accepting text from the console and saving it into:
+
+```text
+BALLS.HEX
+```
 
 ### In the IDE
 
@@ -65,54 +64,97 @@ CP/M is now accepting text from the console into `BALLS.HEX`.
 
 ### In Tera Term
 
-Paste the HEX text, or send the `.HEX` file as a text file.
+Paste the HEX text into the CP/M console.
 
-Recommended serial transmit delay:
-
-```text
-Setup -> Serial port -> Transmit delay: 5 ms/char and 50 ms/line
-```
-
-Some CP/M machines need more delay. If characters are missed, increase the delay.
+Because Tera Term has the transmit delay set, the HEX text should feed into CP/M safely instead of being sent too fast.
 
 ### Finish the PIP input
 
-When all HEX text has been sent, press:
+When all HEX text has been pasted, press:
 
 ```text
 Ctrl-Z
 ```
 
-That tells CP/M/PIP the console input file is finished.
+That tells CP/M/PIP that the console input file is finished.
 
-### Convert HEX to COM
+You should return to the CP/M prompt.
+
+---
+
+## Convert HEX to COM
+
+After the HEX file is saved, use CP/M `LOAD`:
 
 ```text
 C>LOAD BALLS
 ```
 
-This should create:
+This reads:
+
+```text
+BALLS.HEX
+```
+
+and creates:
 
 ```text
 BALLS.COM
 ```
 
-### Run it
+---
+
+## Run the program
 
 ```text
 C>BALLS
 ```
 
-## Which method should I use?
+---
 
-Use XMODEM when available. It is cleaner and transfers the exact binary.
+## Method B: Use ED to create or edit the HEX file
 
-Use HEX paste when:
+You can also use CP/M `ED` to create the HEX file manually.
 
-- you do not have XMODEM on the CP/M disk,
-- your serial transfer setup is not finished,
-- you are debugging early file transfer,
-- you want to copy/paste from the IDE quickly.
+Start ED with:
+
+```text
+C>ED BALLS.HEX
+```
+
+Then enter insert mode:
+
+```text
+I
+```
+
+Paste the HEX text from the IDE into ED.
+
+When finished, press:
+
+```text
+Ctrl-Z
+```
+
+Then save and exit ED with:
+
+```text
+E
+```
+
+Now convert the file with:
+
+```text
+C>LOAD BALLS
+```
+
+Then run it:
+
+```text
+C>BALLS
+```
+
+---
 
 ## Common CP/M commands
 
@@ -129,10 +171,10 @@ C>ERA BALLS.COM
 C>ERA BALLS.HEX
 ```
 
-Run program:
+Capture HEX text from the console:
 
 ```text
-C>BALLS
+C>PIP BALLS.HEX=CON:
 ```
 
 Convert Intel HEX to COM:
@@ -141,16 +183,25 @@ Convert Intel HEX to COM:
 C>LOAD BALLS
 ```
 
-Receive with XMODEM if `XM.COM` is present:
+Run program:
 
 ```text
-C>XM R BALLS.COM
+C>BALLS
 ```
 
-## Tera Term notes
+---
 
-Tera Term is just the terminal. The IDE does not control Tera Term directly.
+## Notes
 
-For text paste to CP/M, slow down transmit speed with per-character and per-line delay. Old machines can lose characters if text is blasted too quickly.
+Tera Term is only the terminal. The IDE does not control Tera Term directly.
 
-For XMODEM, do not paste. Use Tera Term's XMODEM send menu.
+The IDE makes the HEX text easy to copy. CP/M receives that text through the console and saves it as a `.HEX` file.
+
+The important part is slowing down the paste in Tera Term. Use:
+
+```text
+1 ms/char
+1 ms/line
+```
+
+That delay keeps the transfer reliable on older CP/M hardware.
