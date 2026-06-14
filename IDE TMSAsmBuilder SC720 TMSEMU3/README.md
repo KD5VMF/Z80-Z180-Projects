@@ -65,7 +65,7 @@ This was made for this kind of setup:
 - SC720 / SC7xx-style system running RomWBW CP/M
 - TMSEMU3 or J.B. Langston-style TMS9918A video card
 - Windows PC used as the build/transfer machine
-- Tera Term or similar serial terminal for file transfer
+- Tera Term or similar serial terminal for plain-text file transfer
 
 ## Repository layout
 
@@ -119,39 +119,19 @@ C>BALL
 
 The TMSEMU3/TMS9918A display should show a black background with four colored bouncing sprite shapes.
 
-## Transfer Ball Demo to CP/M using XMODEM
+## Important transfer note
 
-XMODEM is usually the easiest way to send the finished `.COM` file.
+Do **not** use XMODEM for this project guide.
 
-On CP/M:
+The reliable method for this setup is to send the Intel HEX file as plain text, then use CP/M `LOAD` to make the `.COM` file on the SC720.
 
-```text
-C>XM R BALL.COM
-```
+Do **not** paste a raw `.COM` file into the terminal. A `.COM` file is binary and may contain control characters such as `Ctrl-Z`, so it can be corrupted if sent as console text.
 
-In Tera Term:
+Use the `.HEX` file for terminal transfer.
 
-```text
-File -> Transfer -> XMODEM -> Send...
-```
-
-Pick this file from the Windows repo folder:
-
-```text
-TMSAsmBuilder\Out\BALL.COM
-```
-
-When the transfer finishes, run it:
-
-```text
-C>BALL
-```
-
-## Transfer Ball Demo to the SC720 using Tera Term, PIP, and the HEX file
+## Best method: transfer BALL.HEX using Tera Term, PIP, and LOAD
 
 This method sends the text `.HEX` file over the console using CP/M `PIP`, then converts it into a runnable `.COM` with CP/M `LOAD`.
-
-Use this when XMODEM is not available, or when sending plain text is easier.
 
 ### 1. Build the program in the IDE
 
@@ -184,6 +164,13 @@ Transmit delay: 50 ms/line
 ```
 
 Then click **OK**.
+
+For very large HEX files, slower is safer:
+
+```text
+Transmit delay: 10 ms/char
+Transmit delay: 100 ms/line
+```
 
 ### 3. Start PIP receive on the SC720
 
@@ -270,6 +257,108 @@ C>LOAD BALL
 C>BALL
 ```
 
+## Backup method: paste the HEX file into ED
+
+If `PIP BALL.HEX=CON:` is not working, you can create the HEX file with CP/M `ED`.
+
+This is slower and less pleasant than PIP, but it works because the Intel HEX file is plain text.
+
+### 1. Start ED
+
+At the SC720 CP/M prompt:
+
+```text
+C>ED BALL.HEX
+```
+
+You should see the ED prompt:
+
+```text
+*
+```
+
+### 2. Enter insert mode
+
+At the `*` prompt, type:
+
+```text
+I
+```
+
+Now ED is waiting for text.
+
+### 3. Paste or send the HEX text
+
+Open `TMSAsmBuilder\Out\BALL.HEX` on the Windows PC.
+
+You can either:
+
+- copy and paste the HEX text into Tera Term, or
+- use Tera Term `File -> Send file...` and choose `BALL.HEX`.
+
+Use transmit delay in Tera Term so CP/M can keep up:
+
+```text
+Transmit delay: 5 ms/char
+Transmit delay: 50 ms/line
+```
+
+For a big file, use:
+
+```text
+Transmit delay: 10 ms/char
+Transmit delay: 100 ms/line
+```
+
+### 4. End insert mode
+
+When the HEX text is done, press:
+
+```text
+Ctrl-Z
+```
+
+That returns you to the ED `*` prompt.
+
+### 5. Save and exit ED
+
+At the `*` prompt, type:
+
+```text
+E
+```
+
+ED writes `BALL.HEX` to disk and exits back to CP/M.
+
+### 6. Convert and run
+
+Now run:
+
+```text
+C>LOAD BALL
+C>BALL
+```
+
+## Copying a COM file with PIP
+
+`PIP` can copy a `.COM` file if the `.COM` file is already on a CP/M disk, RAM disk, ROM disk, CompactFlash drive, or another mounted drive.
+
+Examples:
+
+```text
+C>PIP C:=A:BALL.COM
+```
+
+or:
+
+```text
+C>PIP BALL.COM=B:BALL.COM
+```
+
+That is a normal CP/M file copy.
+
+But do **not** use terminal paste for a `.COM` file. For terminal transfer from Windows to the SC720, send the `.HEX` file and run `LOAD`.
+
 ## Build behavior
 
 The IDE uses a temporary internal build folder so include statements work normally:
@@ -287,7 +376,7 @@ PROGRAM.ASM
 PROGRAM.HEX
 ```
 
-The generated `.COM` is copied to `TMSAsmBuilder/Out` for XMODEM transfer, but it is not copied into the clean project/build folders.
+The generated `.COM` is copied to `TMSAsmBuilder/Out`, but it is not copied into the clean project/build folders.
 
 ## Tools folder
 
@@ -333,7 +422,7 @@ Main REV5 changes:
 - `Load Ball Demo` button added.
 - Bundled `BALL.ASM` sprite demo added.
 - Project file now copies `Assets`, `Libs`, `Templates`, and `Tools` into build/publish output.
-- Docs rewritten around the actual tool, bundled assembler, library files, and CP/M transfer.
+- Docs rewritten around the actual tool, bundled assembler, library files, and CP/M text transfer.
 
 ## License
 
