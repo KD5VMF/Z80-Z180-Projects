@@ -2,7 +2,7 @@
 
 A friendly Windows IDE and build tool for making **Z80 / Z180 CP/M `.COM` programs** that use the **TMS9918A / TMSEMU3 video card** on Small Computer Central / RC2014-style systems.
 
-This repo is set up to be easy to share: the Windows IDE source, the assembler tool, the support ASM libraries, the bouncing sprite demo, docs, and batch files are all included.
+This repo is set up to be easy to share: the Windows IDE source, the assembler tool, the support ASM libraries, the **BALL** sprite demo, docs, and batch files are all included.
 
 ## What opens when you start it
 
@@ -12,13 +12,13 @@ That is intentional. Nothing is loaded until the user chooses one of these:
 
 - **New ASM** — clears the editor and starts a blank program named `NEWPROG.ASM`.
 - **Open ASM** — loads an existing `.ASM` file from disk.
-- **Load Bounce Demo** — loads the bundled `BOUNCE.ASM` demo.
+- **Load Ball Demo** — loads the bundled `BALL.ASM` demo.
 
 The old chess/template program has been removed.
 
-## The bundled Bounce Demo
+## The bundled Ball Demo
 
-`TMSAsmBuilder/Templates/BOUNCE.ASM` is the included demo program.
+`TMSAsmBuilder/Templates/BALL.ASM` is the included demo program.
 
 It builds a CP/M `.COM` and Intel HEX image that:
 
@@ -62,7 +62,7 @@ The IDE resolves those from the shared `TMSAsmBuilder/Libs` folder during build.
 This was made for this kind of setup:
 
 - Small Computer Central / RC2014-style Z80 or Z180 machine
-- RomWBW CP/M
+- SC720 / SC7xx-style system running RomWBW CP/M
 - TMSEMU3 or J.B. Langston-style TMS9918A video card
 - Windows PC used as the build/transfer machine
 - Tera Term or similar serial terminal for file transfer
@@ -77,7 +77,7 @@ This was made for this kind of setup:
 │  ├─ Program.cs                  WinForms entry point
 │  ├─ Assets/                     IDE icon
 │  ├─ Libs/                       shared ASM support libraries
-│  ├─ Templates/                  BOUNCE.ASM demo template
+│  ├─ Templates/                  BALL.ASM demo template
 │  ├─ Tools/                      bundled assembler tool
 │  ├─ Work/                       working ASM area
 │  ├─ Builds/                     timestamped clean ASM + HEX outputs
@@ -95,18 +95,38 @@ This was made for this kind of setup:
 2. Download this repository ZIP and extract it.
 3. Double-click `FIRST_RUN.bat`.
 4. The IDE opens blank.
-5. Click **Load Bounce Demo**, **Open ASM**, or **New ASM**.
+5. Click **Load Ball Demo**, **Open ASM**, or **New ASM**.
 6. Click **Build .COM + .HEX**.
 7. Use the files from:
    - `TMSAsmBuilder/Out` for latest `.COM`, `.ASM`, and `.HEX`
    - `TMSAsmBuilder/Builds/<name>_<timestamp>` for clean `.ASM` and `.HEX` project folders
 
-## Transfer Bounce Demo to CP/M using XMODEM
+After building the Ball demo, the usual output files are:
+
+```text
+BALL.ASM
+BALL.COM
+BALL.HEX
+```
+
+## Run the Ball Demo on CP/M
+
+After transferring the program to the SC720, run it from CP/M:
+
+```text
+C>BALL
+```
+
+The TMSEMU3/TMS9918A display should show a black background with four colored bouncing sprite shapes.
+
+## Transfer Ball Demo to CP/M using XMODEM
+
+XMODEM is usually the easiest way to send the finished `.COM` file.
 
 On CP/M:
 
 ```text
-C>XM R BOUNCE.COM
+C>XM R BALL.COM
 ```
 
 In Tera Term:
@@ -115,36 +135,139 @@ In Tera Term:
 File -> Transfer -> XMODEM -> Send...
 ```
 
-Pick `BOUNCE.COM` from `TMSAsmBuilder/Out`.
+Pick this file from the Windows repo folder:
+
+```text
+TMSAsmBuilder\Out\BALL.COM
+```
+
+When the transfer finishes, run it:
+
+```text
+C>BALL
+```
+
+## Transfer Ball Demo to the SC720 using Tera Term, PIP, and the HEX file
+
+This method sends the text `.HEX` file over the console using CP/M `PIP`, then converts it into a runnable `.COM` with CP/M `LOAD`.
+
+Use this when XMODEM is not available, or when sending plain text is easier.
+
+### 1. Build the program in the IDE
+
+In Windows:
+
+1. Open the IDE.
+2. Click **Load Ball Demo**.
+3. Click **Build .COM + .HEX**.
+4. Find the generated HEX file here:
+
+```text
+TMSAsmBuilder\Out\BALL.HEX
+```
+
+### 2. Set Tera Term transmit delay
+
+This is important. Without a delay, the old CP/M machine can miss characters.
+
+In Tera Term:
+
+```text
+Setup -> Serial port...
+```
+
+Set a small transmit delay such as:
+
+```text
+Transmit delay: 5 ms/char
+Transmit delay: 50 ms/line
+```
+
+Then click **OK**.
+
+### 3. Start PIP receive on the SC720
+
+At the CP/M prompt on the SC720, type:
+
+```text
+C>PIP BALL.HEX=CON:
+```
+
+CP/M is now waiting for text from the console.
+
+### 4. Send the HEX file from Tera Term
+
+In Tera Term:
+
+```text
+File -> Send file...
+```
+
+Choose:
+
+```text
+TMSAsmBuilder\Out\BALL.HEX
+```
+
+Make sure the file is sent as plain text.
+
+Wait until Tera Term finishes sending the file.
+
+### 5. End the PIP transfer
+
+After the file has finished sending, press:
+
+```text
+Ctrl-Z
+```
+
+That tells CP/M that the console file is finished.
+
+You should return to the CP/M prompt.
+
+### 6. Convert the HEX file into a COM file
+
+Now run CP/M `LOAD`:
+
+```text
+C>LOAD BALL
+```
+
+This reads `BALL.HEX` and creates:
+
+```text
+BALL.COM
+```
+
+### 7. Run it
+
+Now run:
+
+```text
+C>BALL
+```
+
+You should see the Ball demo on the TMSEMU3/HDMI screen.
+
+## PIP + LOAD quick command list
+
+Here is the short version for the SC720 side:
+
+```text
+C>PIP BALL.HEX=CON:
+```
+
+Send `BALL.HEX` from Tera Term, then press:
+
+```text
+Ctrl-Z
+```
 
 Then run:
 
 ```text
-C>BOUNCE
-```
-
-## Transfer Bounce Demo to CP/M using PIP + LOAD
-
-This is useful when XMODEM is not available or is being difficult.
-
-On CP/M:
-
-```text
-C>PIP BOUNCE.HEX=CON:
-```
-
-In Tera Term, enable a small transmit delay, then send the `.HEX` as text:
-
-```text
-Setup -> Serial port -> Transmit delay: 5 ms/char and 50 ms/line
-File -> Send file...
-```
-
-After the transfer finishes, press `Ctrl-Z`, then run:
-
-```text
-C>LOAD BOUNCE
-C>BOUNCE
+C>LOAD BALL
+C>BALL
 ```
 
 ## Build behavior
@@ -201,14 +324,14 @@ See `THIRD_PARTY_NOTICES.md` for license and attribution details.
 
 ## Status
 
-Current repo package: **REV5 Bounce Demo GitHub-ready package**
+Current repo package: **REV5 Ball Demo GitHub-ready package**
 
 Main REV5 changes:
 
 - App opens blank with no code loaded.
 - Old chess template removed.
-- `Load Bounce Demo` button added.
-- Bundled `BOUNCE.ASM` sprite demo added.
+- `Load Ball Demo` button added.
+- Bundled `BALL.ASM` sprite demo added.
 - Project file now copies `Assets`, `Libs`, `Templates`, and `Tools` into build/publish output.
 - Docs rewritten around the actual tool, bundled assembler, library files, and CP/M transfer.
 
