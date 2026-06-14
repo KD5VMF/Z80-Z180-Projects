@@ -223,12 +223,10 @@ HELP/02_GIVE_THIS_TO_CHATGPT.md
 
 ```
 
-'''text
-From your webbrowser enter
+'''
+Click the below to package up the IDE and downloa it auto.
 
 https://download-directory.github.io/?url=https://github.com/KD5VMF/Z80-Z180-Projects/tree/main/IDE%20TMSAsmBuilder%20SC720%20TMSEMU3%20REV8/TMSAsmBuilder/bin/Debug/net8.0-windows&filename=TMSAsmBuilder_REV8_ready_to_run
-
-This will pacage up the IDE ready to use.
 
 '''
 
