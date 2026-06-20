@@ -1,6 +1,8 @@
 # TMS ASM Builder IDE for SC720 / TMSEMU3
 
-**Always look/use latest REV. TMS ASM Builder IDE** is a friendly Windows IDE for building **Z80/Z180 RomWBW CP/M `.COM` programs** for a Small Computer Central / RC2014-style computer with a **TMSEMU3 or TMS9918A-compatible video card**.
+**Always look/use latest REV. 
+
+TMS ASM Builder IDE** is a friendly Windows IDE for building **Z80/Z180 RomWBW CP/M `.COM` programs** for a Small Computer Central / RC2014-style computer with a **TMSEMU3 or TMS9918A-compatible video card**.
 
 The goal is simple: write or paste one `.ASM` file on a modern Windows PC, click **Build .COM + .HEX**, then move the result to CP/M with XMODEM or paste-ready Intel HEX.
 
