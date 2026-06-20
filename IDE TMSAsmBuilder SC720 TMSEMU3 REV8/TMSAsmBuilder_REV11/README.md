@@ -1,4 +1,4 @@
-# TMS ASM Builder REV11 Latest IDE
+# TMS ASM Builder REV11 IDE
 
 **Portable Windows ASM IDE for SC720 / SC700 / Z80-Z180 systems using TMSEMU3 / TMS9918A graphics.**
 
