@@ -1,0 +1,36 @@
+TMS ASM Builder REV10A - Editor Stability + RAM Cleanup Fix
+===========================================================
+
+This package fixes the REV10 editor window behavior reported by KD5VMF:
+
+1. ASM editor no longer fights scrolling
+   - The old live syntax colorizer selected the whole RichTextBox after typing.
+   - That could yank the visible text back upward after scrolling/resizing.
+   - The ready-to-run top-level DLL has live auto-colorizing disabled.
+   - The updated source keeps the timer stopped for stable typing.
+
+2. Better editor sizing behavior
+   - Split containers now have safer min sizes and no fixed panel fighting.
+   - ASM/log/HEX panes dock cleanly and resize predictably.
+   - ASM editor forces both scrollbars and keeps word wrap off.
+
+3. Better RAM cleanup behavior in source
+   - Large ASM load path avoids the old MemoryStream + ToArray double-buffer copy.
+   - Old _build_tmp_* folders are cleaned automatically.
+   - Build source buffer is released after build.
+   - Log window auto-trims if it gets huge.
+   - Large Object Heap compaction is requested after heavy loads/builds and on close.
+
+Ready-to-run note
+-----------------
+The top-level TMSAsmBuilder.exe/TMSAsmBuilder.dll is patched for the editor scroll snap.
+The full RAM cleanup/source changes are in src/TMSAsmBuilder and take effect after rebuilding
+on Windows with the included build script or Visual Studio.
+
+Build on Windows
+----------------
+From this folder:
+
+  powershell -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1
+
+or open TMSAsmBuilder.sln in Visual Studio 2022 and build/publish.

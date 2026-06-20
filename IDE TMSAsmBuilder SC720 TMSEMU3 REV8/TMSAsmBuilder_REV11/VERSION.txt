@@ -1,0 +1,9 @@
+TMSAsmBuilder REV11 Latest IDE
+Build package: 2026-06-20
+
+REV11 focus:
+- Proper ASM syntax coloring in source.
+- Default first-start CP/M Hello World.
+- REV10A editor scroll stability preserved.
+- Large-load progress screen and background builds preserved.
+- RAM cleanup after heavy loads/builds preserved.

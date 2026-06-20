@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>TMSAsmBuilder</AssemblyName>
+    <RootNamespace>TMSAsmBuilder</RootNamespace>
+    <ApplicationIcon>..\..\Assets\TMSAsmBuilder.ico</ApplicationIcon>
+    <Version>11.0.0</Version>
+    <FileVersion>11.0.0.0</FileVersion>
+    <AssemblyVersion>11.0.0.0</AssemblyVersion>
+    <Authors>KD5VMF</Authors>
+    <Product>TMSAsmBuilder REV11</Product>
+    <Description>Portable Windows ASM IDE for SC720 / SC700 / Z80-Z180 TMSEMU3 projects.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\Assets\TMSAsmBuilder.ico" Link="Assets\TMSAsmBuilder.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
