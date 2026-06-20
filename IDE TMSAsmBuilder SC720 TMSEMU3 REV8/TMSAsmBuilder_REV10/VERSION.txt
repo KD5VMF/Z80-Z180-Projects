@@ -1,0 +1,12 @@
+TMSAsmBuilder REV10 LATEST IDE
+
+Package created: 2026-06-20
+Ready-to-run EXE: TMSAsmBuilder.exe
+EXE SHA256: fe40e2175856f91e8aef42c78935e74d25fb836283b4286037145d47777955dc
+
+Includes:
+- Compiled REV10 IDE from user-provided REV10 build
+- Clean C# source under src/TMSAsmBuilder
+- Tools/sjasmplus.exe
+- Libs, Templates, Work examples
+- Build scripts and docs
