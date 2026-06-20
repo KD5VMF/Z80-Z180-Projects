@@ -4,6 +4,30 @@
 
 REV11 is the polished editor release: it opens with a ready-to-build CP/M Hello World, restores proper ASM syntax coloring, and keeps the REV10A editor stability and RAM cleanup fixes.
 
+## Easy download
+
+Download the full project as a ZIP:
+
+[Download TMS ASM Builder REV11 / Z80-Z180 Projects ZIP](https://github.com/KD5VMF/Z80-Z180-Projects/archive/refs/heads/main.zip)
+
+After unzipping, open:
+
+```text
+Z80-Z180-Projects-main\IDE TMSAsmBuilder SC720 TMSEMU3 REV8\TMSAsmBuilder_REV11\
+```
+
+Then double-click:
+
+```text
+TMSAsmBuilder.exe
+```
+
+If a GitHub Release ZIP is added later, this cleaner link can be used instead:
+
+```markdown
+[Download TMS ASM Builder REV11 Latest IDE](https://github.com/KD5VMF/Z80-Z180-Projects/releases/latest/download/TMSAsmBuilder_REV11_LATEST_IDE.zip)
+```
+
 ## Run it
 
 Double-click:
